@@ -4,3 +4,5 @@ __pycache__/
 *.pyc
 .pytest_cache/
 data/
+# eval runs: keep reports/plots/results, not the per-experiment databases
+results/**/*.db
