@@ -116,7 +116,7 @@ Implemented (milestone 6) — `compressor.py`, config `[compressor]`:
 - Accounting: `compressed`, `tokens_saved` (gross history-estimate delta), `summary_tokens` (summarizer in + out); summarizer cost and retrieval embedding tokens are included in `cost_usd` / `embed_tokens`, so eval tokens/query is net.
 - Runs after the cache (history requests bypass the cache, so compressor config needn't be in the cache namespace) and before the router.
 - Eval: `evals/conversations.jsonl` (10 hand-written conversations, 15–19 exchanges, all above the trigger) with probes tagged `needle:early`, `needle:middle`, `aggregate`, `recent-only` (+ one `correction`); strategies are experiments in `evals/experiments_compression.toml`. `scripts/compress_delta.py` shows the token/cost delta.
-- Caveat: eval items are independent requests, so each pays the full one-shot cost of summarizing/embedding its older history (no reuse across turns). That is the worst case for summary/retrieval; in live chat the rolling stores amortize it.
+- Two cost views in the eval: **one-shot** (each item pays for summarizing/embedding its whole older history at once — the worst case) and **amortized** (`eval.amortize_compression`, default on: for summary/retrieval strategies the runner replays the compressor turn by turn through the conversation — rolling summary and embeddings reused, no answer calls — and adds total overhead ÷ requests to the final request's answer tokens/cost). The report shows both, with a second pair of frontier plots. The replay makes real budget-tier summarizer and embedding calls.
 - LLMLingua prompt compression is not implemented (optional comparison point, deferred).
 
 ### 3.6 Trace logger
