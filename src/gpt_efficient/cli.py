@@ -1,6 +1,7 @@
-"""Thin Rich CLI: `gpte ask`, `gpte chat`, `gpte traces`, `gpte eval`."""
+"""Thin Rich CLI: `gpte ask|chat|traces|eval`, `gpte router label|train`."""
 
 import argparse
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -16,7 +17,14 @@ from gpt_efficient.engine import Engine
 from gpt_efficient.evals.dataset import load_dataset
 from gpt_efficient.evals.judge import Judge
 from gpt_efficient.evals.report import summarize, write_report
-from gpt_efficient.evals.runner import apply_overrides, load_experiments, run_eval
+from gpt_efficient.evals.runner import _with_retries, apply_overrides, load_experiments, run_eval
+from gpt_efficient.learned_router import (
+    LabelRecord,
+    label_query,
+    load_train_queries,
+    train_router,
+)
+from gpt_efficient.router import HeuristicRouter, rank
 from gpt_efficient.providers import build_embedder, build_providers
 from gpt_efficient.schemas import Message, Tier, TraceRow
 from gpt_efficient.trace import TraceLogger
@@ -139,6 +147,80 @@ def cmd_eval(settings: Settings, args: argparse.Namespace) -> None:
     console.print(f"report: {paths['report']}")
 
 
+def cmd_router_label(settings: Settings, args: argparse.Namespace) -> None:
+    cfg = settings.router.learned
+    queries = load_train_queries(Path(args.data or cfg.train_data))[: args.limit]
+    out = Path(args.out or cfg.labels_path)
+    if out.exists():
+        raise FileExistsError(f"{out} exists; delete it or pass --out")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    tiers = rank(settings.active_tiers)
+    if args.fake:
+        heuristic = HeuristicRouter(settings)
+        console.print("[yellow]--fake: labels come from the heuristic router (illustrative only)[/yellow]")
+    else:
+        providers = build_providers(settings)
+        judge = Judge(settings, providers[settings.judge.provider or settings.default_provider])
+        console.print(
+            f"{len(queries)} queries × {len(tiers)} tiers = {len(queries) * len(tiers)} answers "
+            f"+ {len(queries) * (len(tiers) - 1)} judge calls ({settings.judge.model})"
+        )
+        if Tier.FRONTIER in tiers:
+            console.print("[yellow]the frontier tier is active: this uses paid Pro calls[/yellow]")
+
+    counts: dict[str, int] = {}
+    cost, failed = 0.0, 0
+    with Progress(console=console, transient=True) as bar:
+        task = bar.add_task("labelling", total=len(queries))
+        for q in queries:
+            try:
+                if args.fake:
+                    rec = LabelRecord(id=q.id, query=q.query, category=q.category,
+                                      label=heuristic.route(q.query, []).tier, label_tiers=tiers,
+                                      fake=True)  # fmt: skip
+                else:
+                    rec = _with_retries(
+                        lambda: label_query(q, settings, providers, judge),
+                        settings.eval.max_retries, settings.eval.retry_backoff_s, time.sleep,
+                    )  # fmt: skip
+            except Exception as exc:
+                failed += 1
+                console.print(f"[red]{q.id}: {type(exc).__name__}: {exc}[/red]")
+                continue
+            with out.open("a") as f:
+                f.write(rec.model_dump_json() + "\n")
+            counts[rec.label.value] = counts.get(rec.label.value, 0) + 1
+            cost += rec.cost_usd
+            bar.advance(task)
+    mix = ", ".join(f"{t} {counts.get(t.value, 0)}" for t in tiers)
+    console.print(f"labels → {out}: {mix}; failed {failed}; labelling cost ${cost:.4f}")
+
+
+def cmd_router_train(settings: Settings, args: argparse.Namespace) -> None:
+    from gpt_efficient.fakes import FakeEmbedder
+
+    cfg = settings.router.learned
+    labels = Path(args.labels or cfg.labels_path)
+    records = [LabelRecord.model_validate_json(line) for line in labels.read_text().splitlines() if line]
+    fake = args.fake or any(r.fake for r in records)
+    embedder = FakeEmbedder(settings.embedding_dim or 768) if args.fake else build_embedder(settings)
+    texts = [r.query for r in records]
+    vectors: list[list[float]] = []
+    for i in range(0, len(texts), 50):  # modest batches for the embed API
+        vectors += embedder.embed(texts[i : i + 50])
+    model = train_router(vectors, [r.label for r in records], settings.embedding_model, cfg.C)
+    model.fake = fake
+    default = cfg.model_path.with_name(cfg.model_path.stem + "-fake.json") if fake else cfg.model_path
+    out = Path(args.out) if args.out else default
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(model.model_dump_json(indent=2))
+    cv = "—" if model.cv_accuracy is None else f"{model.cv_accuracy:.2f}"
+    console.print(
+        f"router model → {out}: {model.n_train} examples, labels {model.label_counts}, "
+        f"cross-validated accuracy {cv}" + (" [yellow](FAKE — illustrative only)[/yellow]" if fake else "")
+    )
+
+
 def _provider_names(settings: Settings) -> set[str]:
     return {settings.target(t).provider or settings.default_provider for t in settings.active_tiers}
 
@@ -159,6 +241,17 @@ def main() -> None:
     ev.add_argument("--limit", type=int, help="only the first N dataset items")
     ev.add_argument("--out", help="output dir (default: eval.out_dir/<timestamp>)")
     ev.add_argument("--fake", action="store_true", help="offline fakes; illustrative only")
+    rt = sub.add_parser("router", help="Label data for and train the learned router")
+    rt_sub = rt.add_subparsers(dest="action", required=True)
+    lab = rt_sub.add_parser("label", help="Answer training queries with every tier and judge them")
+    lab.add_argument("--data", help="training queries JSONL (default: router.learned.train_data)")
+    lab.add_argument("--out", help="labels JSONL (default: router.learned.labels_path)")
+    lab.add_argument("--limit", type=int, help="only the first N queries")
+    lab.add_argument("--fake", action="store_true", help="heuristic labels, no API calls; illustrative only")
+    tr = rt_sub.add_parser("train", help="Train the router model from labels")
+    tr.add_argument("--labels", help="labels JSONL (default: router.learned.labels_path)")
+    tr.add_argument("--out", help="model JSON (default: router.learned.model_path)")
+    tr.add_argument("--fake", action="store_true", help="fake embeddings; illustrative only")
     args = parser.parse_args()
 
     settings = Settings()
@@ -169,6 +262,8 @@ def main() -> None:
             cmd_chat(settings)
         elif args.cmd == "eval":
             cmd_eval(settings, args)
+        elif args.cmd == "router":
+            (cmd_router_label if args.action == "label" else cmd_router_train)(settings, args)
         else:
             cmd_traces(settings, args.n)
     except Exception as exc:

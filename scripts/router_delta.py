@@ -7,6 +7,7 @@ the router from config.toml. Prints totals and each query's routed tier.
     uv run python scripts/router_delta.py                  # real config + API key
     uv run python scripts/router_delta.py --queries q.txt  # one query per line
     uv run python scripts/router_delta.py --fake           # offline, illustrative only
+    uv run python scripts/router_delta.py --router learned [--model models/router.json]
 
 Routing trades cost against quality: this script shows the cost side only;
 whether answer quality held is the eval harness's job (milestone 5).
@@ -46,10 +47,18 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--queries", type=Path, help="file with one query per line")
     parser.add_argument("--fake", action="store_true", help="offline fake provider")
+    parser.add_argument("--router", choices=["heuristic", "learned"], help="router to compare (default: config)")
+    parser.add_argument("--model", type=Path, help="learned router model JSON (default: config)")
     args = parser.parse_args()
 
     queries = load_queries(args.queries, DEFAULT_QUERIES)
     settings = Settings()
+    router_cfg = settings.router.model_copy(update={"type": args.router or settings.router.type})
+    if args.model:
+        router_cfg = router_cfg.model_copy(
+            update={"learned": router_cfg.learned.model_copy(update={"model_path": args.model})}
+        )
+    settings = settings.model_copy(update={"router": router_cfg})
     no_cache = settings.cache.model_copy(update={"enabled": False})
     routed = settings.model_copy(update={"cache": no_cache})
     fixed = routed.model_copy(update={"router": RouterConfig(type="fixed")})
@@ -69,11 +78,17 @@ def main() -> None:
     mix = Counter(r.tier.value for r in new_rows)
     console.print("tier mix: " + ", ".join(f"{t} {n}" for t, n in sorted(mix.items())))
 
-    router = build_router(routed)
-    per_query = Table("query", "tier", "score", "reasons", "cost_usd", title="routed run: per query")
+    embedder = None
+    if routed.router.type == "learned":
+        from gpt_efficient.fakes import FakeEmbedder
+        from gpt_efficient.providers import build_embedder
+
+        embedder = FakeEmbedder(routed.embedding_dim or 768) if args.fake else build_embedder(routed)
+    router = build_router(routed, embedder)
+    per_query = Table("query", "tier", "score / conf.", "reasons", "cost_usd", title="routed run: per query")
     for q, r in zip(queries, new_rows, strict=True):
-        d = router.route(q, [])
-        score = "-" if d.score is None else f"{d.score:g}"
+        d = router.route(q, [])  # re-routes to show reasons (learned: re-embeds the query)
+        score = f"{d.score:g}" if d.score is not None else f"{d.confidence:.2f}" if d.confidence else "-"
         per_query.add_row(q, r.tier.value, score, "; ".join(d.reasons), f"{r.cost_usd:.6f}")
     console.print(per_query)
 
