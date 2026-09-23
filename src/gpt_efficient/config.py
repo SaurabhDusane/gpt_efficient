@@ -71,6 +71,21 @@ class RouterConfig(BaseModel):
     heuristic: HeuristicRouterConfig = HeuristicRouterConfig()
 
 
+class CompressorConfig(BaseModel):
+    """History compression for multi-turn requests (turn = one user+assistant exchange)."""
+
+    # "none" sends history as-is; "truncate" keeps only recent turns; "summary"
+    # adds a rolling summary of older turns; "retrieval" adds the older turns
+    # most similar to the query; "summary+retrieval" adds both.
+    strategy: Literal["none", "truncate", "summary", "retrieval", "summary+retrieval"] = "none"
+    trigger_tokens: int = 1500  # compress only when the history estimate exceeds this
+    keep_recent_turns: int = 4  # exchanges always sent verbatim
+    retrieve_k: int = 3  # older exchanges retrieved by embedding similarity
+    summary_tier: Tier = Tier.LOCAL  # the tier whose model writes the summary
+    summary_max_tokens: int = 400
+    chars_per_token: float = 4.0  # for history token estimates / tokens_saved
+
+
 class JudgeConfig(BaseModel):
     """LLM-as-judge for the eval harness. Never used to answer user queries."""
 
@@ -110,6 +125,7 @@ class Settings(BaseSettings):
     embedding_chars_per_token: float = 4.0
     cache: CacheConfig = CacheConfig()
     router: RouterConfig = RouterConfig()
+    compressor: CompressorConfig = CompressorConfig()
     judge: JudgeConfig = JudgeConfig()
     eval: EvalConfig = EvalConfig()
     system_prompt: str = "You are a helpful assistant."
@@ -145,6 +161,11 @@ class Settings(BaseSettings):
         if self.tiers and self.default_tier not in active:
             raise ValueError(f"default_tier {self.default_tier!r} is not active in {active}")
         return self
+
+    @property
+    def needs_embedder(self) -> bool:
+        """Cache lookups and retrieval-based compression both embed text."""
+        return self.cache.enabled or "retrieval" in self.compressor.strategy
 
     @property
     def active_tiers(self) -> list[Tier]:

@@ -56,7 +56,8 @@ class TraceRow(BaseModel):
     tokens_saved: int = 0
     escalated: bool = False
     response_len: int = 0
-    embed_tokens: int = Field(default=0, description="Estimated tokens embedded for the cache lookup.")
+    embed_tokens: int = Field(default=0, description="Estimated tokens embedded (cache lookup, retrieval).")
+    summary_tokens: int = Field(default=0, description="Summarizer tokens in + out (context compressor).")
     error: str | None = Field(default=None, description="Set when the request failed.")
 
 
