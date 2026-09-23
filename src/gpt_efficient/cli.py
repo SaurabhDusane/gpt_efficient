@@ -1,4 +1,4 @@
-"""Thin Rich CLI: `gpte ask|chat|traces|eval`, `gpte router label|train`."""
+"""Thin Rich CLI: `gpte ask|chat|traces|eval|findings`, `gpte router label|train`."""
 
 import argparse
 import time
@@ -11,11 +11,12 @@ from rich.markdown import Markdown
 from rich.progress import Progress
 from rich.table import Table
 
+from gpt_efficient.analysis import RunMeta, git_commit, load_manifest, load_run, write_findings
 from gpt_efficient.cache import SemanticCache
 from gpt_efficient.config import Settings
 from gpt_efficient.engine import Engine
 from gpt_efficient.evals.dataset import load_dataset
-from gpt_efficient.evals.judge import Judge
+from gpt_efficient.evals.judge import RUBRIC_VERSION, Judge
 from gpt_efficient.evals.report import summarize, write_report
 from gpt_efficient.evals.runner import _with_retries, apply_overrides, load_experiments, run_eval
 from gpt_efficient.learned_router import (
@@ -136,6 +137,16 @@ def cmd_eval(settings: Settings, args: argparse.Namespace) -> None:
     if args.fake:
         meta["mode"] = "**FAKE** provider/embedder/judge — illustrative only, not results"
     paths = write_report(results, settings, out, meta)
+    run_meta = RunMeta(
+        fake=args.fake,
+        dataset=str(dataset),
+        experiments=[e.name for e in experiments],
+        judge_model=settings.judge.model,
+        rubric_version=RUBRIC_VERSION,
+        git_commit=git_commit(),
+        generated=datetime.now(UTC).isoformat(timespec="seconds"),
+    )
+    (out / "run.json").write_text(run_meta.model_dump_json(indent=2))
 
     table = Table("experiment", "quality", "tokens/query", "$/1k queries", "cache hits (wrong)", "errors")
     for s in summarize(results, settings.eval.low_quality):
@@ -221,6 +232,16 @@ def cmd_router_train(settings: Settings, args: argparse.Namespace) -> None:
     )
 
 
+def cmd_findings(settings: Settings, args: argparse.Namespace) -> None:
+    manifest = Path(args.manifest or settings.analysis.manifest)
+    runs = {role: load_run(path) for role, path in load_manifest(manifest).items()}
+    paths = write_findings(runs, settings, Path(args.out or settings.analysis.out_dir))
+    fake = [role for role, run in runs.items() if run.meta.fake]
+    if fake:
+        console.print(f"[yellow]fake runs ({', '.join(fake)}): findings are marked ILLUSTRATIVE[/yellow]")
+    console.print(f"findings: {paths['findings']}")
+
+
 def _provider_names(settings: Settings) -> set[str]:
     return {settings.target(t).provider or settings.default_provider for t in settings.active_tiers}
 
@@ -241,6 +262,9 @@ def main() -> None:
     ev.add_argument("--limit", type=int, help="only the first N dataset items")
     ev.add_argument("--out", help="output dir (default: eval.out_dir/<timestamp>)")
     ev.add_argument("--fake", action="store_true", help="offline fakes; illustrative only")
+    fd = sub.add_parser("findings", help="Write findings.md + figures from the runs in a manifest")
+    fd.add_argument("--manifest", help="TOML of role = run dir (default: analysis.manifest)")
+    fd.add_argument("--out", help="output dir (default: analysis.out_dir)")
     rt = sub.add_parser("router", help="Label data for and train the learned router")
     rt_sub = rt.add_subparsers(dest="action", required=True)
     lab = rt_sub.add_parser("label", help="Answer training queries with every tier and judge them")
@@ -262,6 +286,8 @@ def main() -> None:
             cmd_chat(settings)
         elif args.cmd == "eval":
             cmd_eval(settings, args)
+        elif args.cmd == "findings":
+            cmd_findings(settings, args)
         elif args.cmd == "router":
             (cmd_router_label if args.action == "label" else cmd_router_train)(settings, args)
         else:
