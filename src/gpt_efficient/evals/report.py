@@ -212,8 +212,11 @@ def _place_labels(fig, ax, points: list[tuple[str, float, float]], front: set[st
     def annotate(text: str, xy: tuple[float, float], spot, color: str, leader: bool):
         dx, dy, ha, va = spot
         props = {"arrowstyle": "-", "color": _LEADER, "lw": 0.8, "shrinkA": 2, "shrinkB": 6}
+        # surface-coloured backing so lines and whiskers never strike through a label
+        backing = {"facecolor": _SURFACE, "edgecolor": "none", "pad": 1.0, "alpha": 0.9}
         return ax.annotate(text, xy, xytext=(dx, dy), textcoords="offset points", fontsize=8.5,
-                           ha=ha, va=va, color=color, arrowprops=props if leader else None)  # fmt: skip
+                           ha=ha, va=va, color=color, bbox=backing,
+                           arrowprops=props if leader else None)  # fmt: skip
 
     for c in clusters:
         text = "\n".join(n for n, _, _ in c)
