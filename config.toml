@@ -17,7 +17,17 @@ tier_mode = "three"
 # embedding_provider defaults to default_provider.
 embedding_model = "gemini-embedding-2"
 embedding_price_per_mtok = 0.20  # text input
-# embedding_dim: unset = model's native size. Set it in milestone 3 (cache experiment knob).
+embedding_dim = 768  # model default is 3072; truncated dims are auto-normalized
+# Gemini's embed API reports no token counts; trace embed_tokens is chars / this.
+embedding_chars_per_token = 4.0
+
+# Semantic cache (milestone 3). Queries with conversation history bypass it.
+[cache]
+enabled = true
+threshold = 0.95  # cosine similarity for a hit; sweep this in the harness
+db = "data/cache.db"
+embed_template = "{text}"  # raw query; a task-prefix variant is a later experiment
+version = "1"  # bump to invalidate all cached answers
 
 [tier_modes]
 two = ["local", "mid"]

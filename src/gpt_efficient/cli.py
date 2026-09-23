@@ -7,9 +7,10 @@ from rich.console import Console
 from rich.markdown import Markdown
 from rich.table import Table
 
+from gpt_efficient.cache import SemanticCache
 from gpt_efficient.config import Settings
 from gpt_efficient.engine import Engine
-from gpt_efficient.providers import build_providers
+from gpt_efficient.providers import build_embedder, build_providers
 from gpt_efficient.schemas import Message, TraceRow
 from gpt_efficient.trace import TraceLogger
 
@@ -17,12 +18,21 @@ console = Console()
 
 
 def _engine(settings: Settings) -> Engine:
-    return Engine(settings, build_providers(settings), TraceLogger(settings.trace_db))
+    cache_on = settings.cache.enabled
+    return Engine(
+        settings,
+        build_providers(settings),
+        TraceLogger(settings.trace_db),
+        embedder=build_embedder(settings) if cache_on else None,
+        cache=SemanticCache(settings.cache.db) if cache_on else None,
+    )
 
 
 def _footer(row: TraceRow) -> str:
+    sim = f" {row.cache_sim:.3f}" if row.cache_sim is not None else ""
     return (
-        f"[dim]{row.tier}/{row.model} · in {row.tokens_in} · out {row.tokens_out} · "
+        f"[dim]{row.tier}/{row.model} · cache {row.cache_status}{sim} · "
+        f"in {row.tokens_in} · out {row.tokens_out} · "
         f"${row.cost_usd:.6f} · {row.latency_ms:.0f} ms[/dim]"
     )
 
