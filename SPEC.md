@@ -104,6 +104,14 @@ Implemented (milestone 4):
 - Runs only on a cache miss (pipeline order: cache → router → provider). The active router's config is part of the cache namespace.
 - The heuristic ignores conversation history for now.
 
+Implemented (milestone 7) — learned router, `learned_router.py` + `router.LearnedRouter`, config `[router.learned]`:
+- **Training data**: `evals/router_train.jsonl`, 150 hand-written queries (5 categories × 3 difficulty hints × 10), disjoint from every eval set (a test rejects exact and near-duplicate overlap, token Jaccard ≥ 0.6). The difficulty field is an authoring hint only — never a label.
+- **Labels** (`gpte router label`, pseudo-reference): every active tier answers each query; the judge grades each cheaper tier's answer with the top tier's answer as the reference; label = cheapest tier scoring ≥ `label_min_score` (8), else the top tier. Labelling cost is recorded per record. Labels therefore mean "agrees with the top tier", not "correct".
+- **Model** (`gpte router train`): class-balanced multinomial logistic regression (scikit-learn) on the L2-normalized query embedding; stored as JSON (`models/router.json`: classes, weights, embedding model/dim, label counts, cross-validated accuracy). Routing refuses a model trained on a different embedding space.
+- **Routing**: probabilities renormalized over the active tiers; confidence = top probability; below `confidence_threshold` (0.6) and with `escalate = true`, route one active tier up (capped). The router's query embedding counts in `embed_tokens`. Its settings and a hash of the model file are part of the cache namespace.
+- **Benchmark**: experiments `learned` / `learned-two` in `evals/experiments.toml` alongside `heuristic` / `heuristic-two`; the report's Routing section shows tier mix, mean confidence and escalations; `scripts/router_delta.py --router learned` shows the cost delta.
+- `--fake` labels come from the heuristic router and training uses fake embeddings — illustrative only; fake models are saved as `*-fake.json` (git-ignored).
+
 ### 3.5 Context compressor
 - Rolling summary of old turns + embedding-retrieval of only relevant prior turns.
 - Optional prompt compression (LLMLingua) as a comparison point.
@@ -122,11 +130,12 @@ Implemented (milestone 6) — `compressor.py`, config `[compressor]`:
 ### 3.6 Trace logger
 One row per request. Pydantic schema, written to SQLite (and/or JSONL).
 
-Fields: `id, ts, query_hash, cache_status, cache_sim, tier, provider, model, tokens_in, tokens_out, cost_usd, latency_ms, compressed (bool), tokens_saved, escalated (bool), response_len, embed_tokens, summary_tokens, error`.
+Fields: `id, ts, query_hash, cache_status, cache_sim, tier, provider, model, tokens_in, tokens_out, cost_usd, latency_ms, compressed (bool), tokens_saved, escalated (bool), response_len, embed_tokens, summary_tokens, route_confidence, error`.
 
 - `cache_status`: `hit` | `miss` | `bypass` (cache on but not consulted) | `disabled`.
 - `tokens_in` / `tokens_out` are LLM tokens only: `tokens_in` includes any prompt-cache reads/writes, `tokens_out` includes thinking tokens.
 - `embed_tokens` is the (estimated, `chars / embedding_chars_per_token`) size of text embedded for the cache lookup and compressor retrieval — Gemini's embed API reports no counts.
+- `escalated`: the request was routed one tier above the router's prediction because the learned router's confidence was below threshold (answer-quality escalation is not implemented). `route_confidence`: the learned router's confidence (null for other routers).
 - `compressed` / `tokens_saved` / `summary_tokens`: whether the compressor shrank the history, the estimated history tokens removed (gross), and the summarizer's tokens in + out.
 - `cost_usd` = LLM cost + summarizer cost + embedding cost; `latency_ms` is end-to-end (embed + lookup + LLM).
 - `error` is null on success; failed requests still emit their row with the exception recorded.
@@ -150,7 +159,7 @@ Implemented (milestone 5) — `gpte eval [--only a,b] [--limit N] [--fake]`, cod
 ---
 
 ## 4. Configuration
-All experiment knobs in one `config.toml` (or pydantic-settings): default provider, tier→model map, active tier set (`tier_mode`), router type + heuristic weights/cutoffs, compressor strategy/trigger/window/k/summary tier, judge model/temperature, eval dataset/experiments/retries, per-model pricing (incl. long-context rates), embedding model/dim/price, cache threshold, compressor limits, router type, judge model. Changing a config value and re-running the harness = one experiment.
+All experiment knobs in one `config.toml` (or pydantic-settings): default provider, tier→model map, active tier set (`tier_mode`), router type + heuristic weights/cutoffs + learned-router threshold/escalation/label score, compressor strategy/trigger/window/k/summary tier, judge model/temperature, eval dataset/experiments/retries, per-model pricing (incl. long-context rates), embedding model/dim/price, cache threshold, compressor limits, router type, judge model. Changing a config value and re-running the harness = one experiment.
 
 ---
 
