@@ -1,17 +1,24 @@
-"""Thin Rich CLI: `gpte ask`, `gpte chat`, `gpte traces`."""
+"""Thin Rich CLI: `gpte ask`, `gpte chat`, `gpte traces`, `gpte eval`."""
 
 import argparse
+from datetime import UTC, datetime
+from pathlib import Path
 
 from dotenv import load_dotenv
 from rich.console import Console
 from rich.markdown import Markdown
+from rich.progress import Progress
 from rich.table import Table
 
 from gpt_efficient.cache import SemanticCache
 from gpt_efficient.config import Settings
 from gpt_efficient.engine import Engine
+from gpt_efficient.evals.dataset import load_dataset
+from gpt_efficient.evals.judge import Judge
+from gpt_efficient.evals.report import summarize, write_report
+from gpt_efficient.evals.runner import apply_overrides, load_experiments, run_eval
 from gpt_efficient.providers import build_embedder, build_providers
-from gpt_efficient.schemas import Message, TraceRow
+from gpt_efficient.schemas import Message, Tier, TraceRow
 from gpt_efficient.trace import TraceLogger
 
 console = Console()
@@ -71,6 +78,71 @@ def cmd_traces(settings: Settings, limit: int) -> None:
     console.print(table)
 
 
+def cmd_eval(settings: Settings, args: argparse.Namespace) -> None:
+    from gpt_efficient.fakes import FakeEmbedder, FakeJudgeProvider, FakeProvider
+
+    dataset = Path(args.dataset or settings.eval.dataset)
+    items = load_dataset(dataset)[: args.limit]
+    experiments = load_experiments(Path(args.experiments or settings.eval.experiments))
+    if args.only:
+        wanted = [n.strip() for n in args.only.split(",") if n.strip()]
+        unknown = sorted(set(wanted) - {e.name for e in experiments})
+        if unknown:
+            raise ValueError(f"unknown experiments {unknown}; have {[e.name for e in experiments]}")
+        experiments = [e for e in experiments if e.name in wanted]
+    stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S") + ("-fake" if args.fake else "")
+    out = Path(args.out) if args.out else settings.eval.out_dir / stamp
+
+    if args.fake:
+        judge = Judge(settings, FakeJudgeProvider(settings))
+        make_providers = lambda s: {n: FakeProvider(s) for n in _provider_names(s)}  # noqa: E731
+        make_embedder = lambda s: FakeEmbedder(s.embedding_dim or 768)  # noqa: E731
+    else:
+        judge_provider = settings.judge.provider or settings.default_provider
+        judge = Judge(settings, build_providers(settings)[judge_provider])
+        make_providers, make_embedder = build_providers, build_embedder
+
+    paid = [e.name for e in experiments if Tier.FRONTIER in apply_overrides(settings, e.overrides).active_tiers]
+    console.print(
+        f"{len(items)} items × {len(experiments)} experiments = {len(items) * len(experiments)} "
+        f"requests (+ judge calls, {settings.judge.model}) → {out}"
+    )
+    if paid and not args.fake:
+        console.print(f"[yellow]can reach the paid frontier tier:[/yellow] {', '.join(paid)}")
+
+    with Progress(console=console, transient=True) as bar:
+        tasks: dict[str, int] = {}
+
+        def progress(name: str, done: int, total: int) -> None:
+            if name not in tasks:
+                tasks[name] = bar.add_task(name, total=total)
+            bar.update(tasks[name], completed=done)
+
+        results = run_eval(
+            settings, experiments, items, out,
+            make_providers=make_providers, make_embedder=make_embedder,
+            judge=judge, progress=progress,
+        )  # fmt: skip
+
+    meta = {"dataset": str(dataset), "experiments": ", ".join(e.name for e in experiments)}
+    if args.fake:
+        meta["mode"] = "**FAKE** provider/embedder/judge — illustrative only, not results"
+    paths = write_report(results, settings, out, meta)
+
+    table = Table("experiment", "quality", "tokens/query", "$/1k queries", "cache hits (wrong)", "errors")
+    for s in summarize(results, settings.eval.low_quality):
+        q = "—" if s.mean_quality is None else f"{s.mean_quality:.3f}"
+        tok = "—" if s.mean_tokens is None else f"{s.mean_tokens:,.0f}"
+        usd = "—" if s.mean_cost_usd is None else f"${s.mean_cost_usd * 1000:.4f}"
+        table.add_row(s.experiment, q, tok, usd, f"{s.cache_hits} ({s.wrong_cache_hits})", str(s.errors))
+    console.print(table)
+    console.print(f"report: {paths['report']}")
+
+
+def _provider_names(settings: Settings) -> set[str]:
+    return {settings.target(t).provider or settings.default_provider for t in settings.active_tiers}
+
+
 def main() -> None:
     load_dotenv()
     parser = argparse.ArgumentParser(prog="gpte")
@@ -80,6 +152,13 @@ def main() -> None:
     sub.add_parser("chat", help="Interactive chat")
     traces = sub.add_parser("traces", help="Show recent trace rows")
     traces.add_argument("-n", type=int, default=20)
+    ev = sub.add_parser("eval", help="Run the eval harness and write a report")
+    ev.add_argument("--dataset", help="JSONL dataset (default: eval.dataset)")
+    ev.add_argument("--experiments", help="experiments TOML (default: eval.experiments)")
+    ev.add_argument("--only", help="comma-separated experiment names to run")
+    ev.add_argument("--limit", type=int, help="only the first N dataset items")
+    ev.add_argument("--out", help="output dir (default: eval.out_dir/<timestamp>)")
+    ev.add_argument("--fake", action="store_true", help="offline fakes; illustrative only")
     args = parser.parse_args()
 
     settings = Settings()
@@ -88,6 +167,8 @@ def main() -> None:
             cmd_ask(settings, args.query)
         elif args.cmd == "chat":
             cmd_chat(settings)
+        elif args.cmd == "eval":
+            cmd_eval(settings, args)
         else:
             cmd_traces(settings, args.n)
     except Exception as exc:
