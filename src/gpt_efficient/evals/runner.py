@@ -36,6 +36,7 @@ class ItemResult(BaseModel):
     difficulty: str
     category: str
     tags: list[str] = []
+    paraphrase_of: str | None = None
     answer: str | None = None
     error: str | None = None  # the system failed to answer (after retries)
     # from the request's trace row
@@ -138,6 +139,7 @@ def _run_item(
         "difficulty": item.difficulty,
         "category": item.category,
         "tags": item.tags,
+        "paraphrase_of": item.paraphrase_of,
         "exact_expected": item.exact,
     }
     try:

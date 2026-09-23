@@ -125,6 +125,24 @@ class EvalConfig(BaseModel):
     amortize_compression: bool = True
 
 
+class AnalysisConfig(BaseModel):
+    """Results analysis (notebooks/results.ipynb, `gpte findings`)."""
+
+    manifest: Path = Path("results/manifest.toml")  # which run dir answers which question
+    out_dir: Path = Path("results/findings")
+    # Non-inferiority: a config "holds quality" if the lower bound of the paired CI of
+    # (config - reference) quality is above -margin (0.05 = half a judge point).
+    margin: float = 0.05
+    confidence: float = 0.95
+    n_boot: int = 2000  # paired bootstrap resamples over items
+    seed: int = 0
+    # First experiment present becomes the quality reference.
+    reference_order: list[str] = ["fixed-frontier", "fixed-mid"]
+    router_pairs: list[list[str]] = [["learned", "heuristic"], ["learned-two", "heuristic-two"]]
+    cache_suffix: str = "+cache"  # "<x>+cache" is compared with "<x>"
+    compression_baseline: str = "no-compression"
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="GPTE_", env_nested_delimiter="__")
 
@@ -147,6 +165,7 @@ class Settings(BaseSettings):
     compressor: CompressorConfig = CompressorConfig()
     judge: JudgeConfig = JudgeConfig()
     eval: EvalConfig = EvalConfig()
+    analysis: AnalysisConfig = AnalysisConfig()
     system_prompt: str = "You are a helpful assistant."
     max_tokens: int = 1024
     trace_db: Path = Path("data/traces.db")

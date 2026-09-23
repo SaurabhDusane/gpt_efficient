@@ -95,6 +95,20 @@ retry_backoff_s = 5.0    # doubles each retry
 request_delay_s = 0.0    # raise this on the free tier to stay under RPM limits
 low_quality = 0.5        # cache hit with quality below this = wrong hit
 
+# Results analysis (milestone 8): `gpte findings` / notebooks/results.ipynb.
+# The manifest maps roles to eval run dirs: routing = <seed.jsonl run>, compression = <conversations.jsonl run>.
+[analysis]
+manifest = "results/manifest.toml"
+out_dir = "results/findings"
+margin = 0.05            # quality held if lower CI bound of (config - reference) > -margin
+confidence = 0.95        # paired percentile bootstrap over items
+n_boot = 2000
+seed = 0
+reference_order = ["fixed-frontier", "fixed-mid"]   # first present is the reference
+router_pairs = [["learned", "heuristic"], ["learned-two", "heuristic-two"]]
+cache_suffix = "+cache"
+compression_baseline = "no-compression"
+
 [tier_modes]
 two = ["local", "mid"]
 three = ["local", "mid", "frontier"]
