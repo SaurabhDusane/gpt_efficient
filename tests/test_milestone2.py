@@ -145,7 +145,10 @@ def test_embedder_returns_vectors(settings: Settings) -> None:
     assert all(len(v) == 8 for v in vectors)
     call = client.models.embed_calls[0]
     assert call["model"] == "gemini-embedding-2"
-    assert call["contents"] == ["a", "b", "c"]
+    # gemini-embedding-2 aggregates a bare list of strings into ONE embedding;
+    # each text must be its own Content to get one vector per text.
+    assert [c.parts[0].text for c in call["contents"]] == ["a", "b", "c"]
+    assert all(len(c.parts) == 1 for c in call["contents"])
     assert call["config"].output_dimensionality == 8
 
 

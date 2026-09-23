@@ -73,9 +73,12 @@ class GeminiEmbedder:
 
     def embed(self, texts: list[str]) -> list[Vector]:
         dim = self._settings.embedding_dim
+        # A bare list of strings is aggregated into ONE embedding by
+        # gemini-embedding-2; wrapping each text in its own Content yields one each.
+        contents = [types.Content(parts=[types.Part(text=t)]) for t in texts]
         resp = self.client.models.embed_content(
             model=self._settings.embedding_model,
-            contents=texts,
+            contents=contents,
             config=types.EmbedContentConfig(output_dimensionality=dim),
         )
         vectors = [[float(x) for x in e.values] for e in resp.embeddings]
