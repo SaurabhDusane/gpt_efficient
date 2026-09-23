@@ -95,6 +95,12 @@ Implemented (milestone 3):
 - Both implement the same `Router` interface; swappable via config.
 - Escalation policy (optional, later): if a low tier's answer fails a cheap quality check, retry one tier up. Log escalations.
 
+Implemented (milestone 4):
+- Interface: `Router.route(query, history) -> RouteDecision(tier, score, confidence, reasons)`; `router.type` in config selects `fixed` (always `default_tier` — the pre-router baseline) or `heuristic`.
+- Heuristic = pure functions: features (word count, distinct complexity keywords incl. plurals, code patterns, math patterns) → points (weights in `[router.heuristic]`, keyword points capped) → score → tier via `tier_cutoffs`. The cheapest active tier is the floor; the highest *active* tier whose cutoff the score meets wins, so in `tier_mode = "two"` frontier-grade queries stay on mid. Detection regexes live in code; every weight, threshold, keyword and cutoff is config. Defaults are untuned.
+- Runs only on a cache miss (pipeline order: cache → router → provider). The active router's config is part of the cache namespace.
+- The heuristic ignores conversation history for now.
+
 ### 3.5 Context compressor
 - Rolling summary of old turns + embedding-retrieval of only relevant prior turns.
 - Optional prompt compression (LLMLingua) as a comparison point.
@@ -123,7 +129,7 @@ Without this, every optimization is blind. It is a Phase 1 deliverable, not a fi
 ---
 
 ## 4. Configuration
-All experiment knobs in one `config.toml` (or pydantic-settings): default provider, tier→model map, active tier set (`tier_mode`), per-model pricing (incl. long-context rates), embedding model/dim/price, cache threshold, compressor limits, router type, judge model. Changing a config value and re-running the harness = one experiment.
+All experiment knobs in one `config.toml` (or pydantic-settings): default provider, tier→model map, active tier set (`tier_mode`), router type + heuristic weights/cutoffs, per-model pricing (incl. long-context rates), embedding model/dim/price, cache threshold, compressor limits, router type, judge model. Changing a config value and re-running the harness = one experiment.
 
 ---
 

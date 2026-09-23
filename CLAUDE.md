@@ -18,7 +18,8 @@ A chat assistant optimized for **quality per token**, plus a benchmark that meas
 - **Tier set:** `tier_mode` in `config.toml` picks a list from `[tier_modes]` (`two` = free-tier Flash-Lite + Flash, `three` adds paid Pro). Read it via `Settings.active_tiers`; never assume the number of tiers.
 - **Token accounting:** `tokens_out` includes thinking tokens on every provider; `tokens_in` includes cached-prompt tokens. Embedding tokens go in `embed_tokens` (estimated) and their cost is included in `cost_usd`.
 - **Semantic cache:** `cache.py` stores/searches vectors only; the engine embeds and applies the threshold. Anything that changes answers must be part of `cache_namespace()` — when you add a new answer-affecting setting (e.g. router config), add it there. Queries with history bypass the cache.
-- **Savings scripts:** `scripts/<mechanism>_delta.py` compares a mechanism against the baseline (`--fake` runs offline, illustrative only).
+- **Router:** `router.py`; implement the `Router` protocol and register the type in `build_router()` + the `RouterConfig.type` Literal. Keep scoring in pure functions. `fixed` is the no-router baseline. Router config is in the cache namespace (`cache._router_key`); a new router type must add its params there.
+- **Savings scripts:** `scripts/<mechanism>_delta.py` compares a mechanism against the baseline (`--fake` runs offline, illustrative only). Shared fakes/run/delta table live in `scripts/_common.py`.
 
 ## Workflow expectations
 - Before writing code for a milestone, restate the milestone's goal and its test in one line, then list the files you'll create/change. Wait for nothing if it's within the current milestone; just proceed.
