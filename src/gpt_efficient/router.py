@@ -10,7 +10,9 @@ from typing import Protocol, runtime_checkable
 
 from pydantic import BaseModel
 
+from gpt_efficient.cache import estimate_tokens
 from gpt_efficient.config import HeuristicRouterConfig, Settings
+from gpt_efficient.providers.base import Embedder
 from gpt_efficient.schemas import Message, Tier
 
 
@@ -18,6 +20,8 @@ class RouteDecision(BaseModel):
     tier: Tier
     score: float | None = None
     confidence: float | None = None  # heuristic: None; learned router: model confidence
+    escalated: bool = False  # routed one tier above the prediction (low confidence)
+    embed_tokens: int = 0  # tokens the router itself embedded (learned router)
     reasons: list[str] = []
 
 
@@ -151,9 +155,70 @@ class HeuristicRouter:
         )
 
 
-def build_router(settings: Settings) -> Router:
+class LearnedRouter:
+    """Embedding classifier (learned_router.RouterModel) -> tier + confidence.
+
+    Probabilities are renormalized over the active tiers; below the confidence
+    threshold the router escalates one active tier up (if `escalate`).
+    """
+
+    name = "learned"
+
+    def __init__(self, settings: Settings, embedder: Embedder) -> None:
+        from gpt_efficient.learned_router import RouterModel  # avoid an import cycle
+
+        cfg = settings.router.learned
+        if not cfg.model_path.exists():
+            raise FileNotFoundError(
+                f"no learned router model at {cfg.model_path}; "
+                "label and train one with `gpte router label` then `gpte router train`"
+            )
+        self.model = RouterModel.model_validate_json(cfg.model_path.read_text())
+        if self.model.embedding_model != settings.embedding_model or (
+            settings.embedding_dim is not None and self.model.embedding_dim != settings.embedding_dim
+        ):
+            raise ValueError(
+                f"router model was trained on embeddings from {self.model.embedding_model} "
+                f"({self.model.embedding_dim}-d), but config uses {settings.embedding_model} "
+                f"({settings.embedding_dim}-d); retrain it"
+            )
+        self.cfg = cfg
+        self.embedder = embedder
+        self.active = rank(settings.active_tiers)
+        self.chars_per_token = settings.embedding_chars_per_token
+
+    def route(self, query: str, history: list[Message]) -> RouteDecision:
+        [vector] = self.embedder.embed([query])
+        probs = {t: p for t, p in self.model.probabilities(vector).items() if t in self.active}
+        if not probs:
+            raise ValueError(f"router model classes {self.model.classes} are all inactive")
+        total = sum(probs.values())
+        probs = {t: p / total for t, p in probs.items()}
+        predicted = max(probs, key=lambda t: probs[t])
+        confidence = probs[predicted]
+        tier, escalated = predicted, False
+        higher = self.active[self.active.index(predicted) + 1 :]
+        if self.cfg.escalate and confidence < self.cfg.confidence_threshold and higher:
+            tier, escalated = higher[0], True
+        reasons = [", ".join(f"p({t.value})={p:.2f}" for t, p in probs.items())]
+        if escalated:
+            reasons.append(f"confidence {confidence:.2f} < {self.cfg.confidence_threshold}: escalated")
+        return RouteDecision(
+            tier=tier,
+            confidence=confidence,
+            escalated=escalated,
+            embed_tokens=estimate_tokens(query, self.chars_per_token),
+            reasons=reasons,
+        )
+
+
+def build_router(settings: Settings, embedder: Embedder | None = None) -> Router:
     match settings.router.type:
         case "fixed":
             return FixedRouter(settings)
         case "heuristic":
             return HeuristicRouter(settings)
+        case "learned":
+            if embedder is None:
+                raise ValueError("the learned router needs an embedder")
+            return LearnedRouter(settings, embedder)

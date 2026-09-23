@@ -31,7 +31,7 @@ class Engine:
         self.logger = logger
         self.embedder = embedder
         self.cache = cache
-        self.router = router or build_router(settings)
+        self.router = router or build_router(settings, embedder)
         self.compressor = Compressor(settings, providers, embedder, summary_store)
         self.namespace = cache_namespace(settings)
 
@@ -93,6 +93,8 @@ class Engine:
         decision = self.router.route(query, history)
         target = self.settings.target(decision.tier)
         row.tier, row.provider, row.model = decision.tier, target.provider, target.model
+        row.route_confidence, row.escalated = decision.confidence, decision.escalated
+        row.embed_tokens += decision.embed_tokens
 
         messages = [
             Message(role="system", content=self.settings.system_prompt),

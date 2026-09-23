@@ -61,6 +61,11 @@ def _router_key(settings: Settings) -> dict[str, object]:
     key: dict[str, object] = {"type": r.type}
     if r.type == "heuristic":  # only the active router's params matter
         key["heuristic"] = r.heuristic.model_dump(mode="json")
+    if r.type == "learned":
+        key["learned"] = r.learned.model_dump(mode="json", include={"confidence_threshold", "escalate"})
+        # a retrained model routes differently, so the model file itself is part of the key
+        path = r.learned.model_path
+        key["model_sha"] = hashlib.sha256(path.read_bytes()).hexdigest() if path.exists() else None
     return key
 
 
