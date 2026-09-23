@@ -30,7 +30,7 @@ def _engine(settings: Settings) -> Engine:
         settings,
         build_providers(settings),
         TraceLogger(settings.trace_db),
-        embedder=build_embedder(settings) if cache_on else None,
+        embedder=build_embedder(settings) if settings.needs_embedder else None,
         cache=SemanticCache(settings.cache.db) if cache_on else None,
     )
 

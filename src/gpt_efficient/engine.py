@@ -1,13 +1,11 @@
-"""Request pipeline. So far: semantic cache -> router -> provider -> trace.
-
-The compressor slots in between cache and router in a later milestone.
-"""
+"""Request pipeline: semantic cache -> context compressor -> router -> provider -> trace."""
 
 import time
 import uuid
 from datetime import UTC, datetime
 
 from gpt_efficient.cache import CacheEntry, SemanticCache, cache_namespace, estimate_tokens
+from gpt_efficient.compressor import Compressor, SummaryStore
 from gpt_efficient.config import Settings
 from gpt_efficient.providers.base import Embedder, LLMProvider
 from gpt_efficient.router import Router, build_router
@@ -24,6 +22,7 @@ class Engine:
         embedder: Embedder | None = None,
         cache: SemanticCache | None = None,
         router: Router | None = None,
+        summary_store: SummaryStore | None = None,
     ) -> None:
         if settings.cache.enabled and (embedder is None or cache is None):
             raise ValueError("cache.enabled requires an embedder and a SemanticCache")
@@ -33,6 +32,7 @@ class Engine:
         self.embedder = embedder
         self.cache = cache
         self.router = router or build_router(settings)
+        self.compressor = Compressor(settings, providers, embedder, summary_store)
         self.namespace = cache_namespace(settings)
 
     def ask(self, query: str, history: list[Message] | None = None) -> Response:
@@ -82,6 +82,14 @@ class Engine:
                 row.response_len = len(entry.response)
                 return entry.response
 
+        # Compressing never touches the cache: requests with history bypass it.
+        comp = self.compressor.compress(query, history)
+        row.compressed, row.tokens_saved = comp.compressed, comp.tokens_saved
+        row.summary_tokens = comp.summary_tokens
+        row.embed_tokens += comp.embed_tokens
+        row.cost_usd = comp.summary_cost_usd  # spent even if the answer call fails
+        history = comp.messages
+
         decision = self.router.route(query, history)
         target = self.settings.target(decision.tier)
         row.tier, row.provider, row.model = decision.tier, target.provider, target.model
@@ -97,7 +105,7 @@ class Engine:
         row.model = completion.model
         row.tokens_in = completion.tokens_in
         row.tokens_out = completion.tokens_out
-        row.cost_usd = completion.cost_usd
+        row.cost_usd += completion.cost_usd
         row.response_len = len(completion.text)
 
         if vector is not None and completion.text:
