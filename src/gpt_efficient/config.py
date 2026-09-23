@@ -71,6 +71,26 @@ class RouterConfig(BaseModel):
     heuristic: HeuristicRouterConfig = HeuristicRouterConfig()
 
 
+class JudgeConfig(BaseModel):
+    """LLM-as-judge for the eval harness. Never used to answer user queries."""
+
+    provider: str | None = None  # None -> default_provider
+    model: str = "gemini-2.5-pro"
+    max_tokens: int = 4096  # thinking judges spend output tokens before the verdict
+    temperature: float | None = 0.0  # deterministic grading; None = provider default
+
+
+class EvalConfig(BaseModel):
+    dataset: Path = Path("evals/seed.jsonl")
+    experiments: Path = Path("evals/experiments.toml")
+    out_dir: Path = Path("results")
+    max_retries: int = 2  # per request, for transient errors (e.g. rate limits)
+    retry_backoff_s: float = 5.0  # doubles on each retry
+    request_delay_s: float = 0.0  # pause between items (free-tier rate limits)
+    # A cache hit whose judged quality falls below this counts as a wrong hit.
+    low_quality: float = 0.5
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="GPTE_", env_nested_delimiter="__")
 
@@ -90,6 +110,8 @@ class Settings(BaseSettings):
     embedding_chars_per_token: float = 4.0
     cache: CacheConfig = CacheConfig()
     router: RouterConfig = RouterConfig()
+    judge: JudgeConfig = JudgeConfig()
+    eval: EvalConfig = EvalConfig()
     system_prompt: str = "You are a helpful assistant."
     max_tokens: int = 1024
     trace_db: Path = Path("data/traces.db")
