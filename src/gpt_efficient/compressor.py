@@ -190,3 +190,43 @@ class Compressor:
         result.embed_tokens += sum(estimate_tokens(t, cpt) for t in [query, *new])
         vecs = [self._vectors[t] for t in older_texts]
         return [older_texts[i] for i in top_k_indices(query_vec, vecs, self.cfg.retrieve_k)]
+
+
+class Overhead(BaseModel):
+    """Compressor overhead summed over a replayed conversation."""
+
+    requests: int = 0
+    summary_tokens: int = 0
+    summary_cost_usd: float = 0.0
+    embed_tokens: int = 0
+
+
+def replay_overhead(
+    settings: Settings,
+    providers: dict[str, LLMProvider],
+    embedder: Embedder | None,
+    query: str,
+    history: list[Message],
+) -> Overhead:
+    """Replay a conversation turn by turn through a fresh compressor (no answer calls).
+
+    Each user turn is one request whose history is everything before it; the
+    rolling summary and exchange embeddings carry over between turns exactly as
+    in a live chat. Returns the total overhead and the request count, so callers
+    can report the average compressor cost per request of the conversation.
+    """
+    comp = Compressor(settings, providers, embedder)
+    exchanges = split_exchanges(history)
+    total = Overhead()
+    steps = [
+        ([m for ex in exchanges[:t] for m in ex], exchanges[t][0].content)
+        for t in range(len(exchanges))
+        if exchanges[t][0].role == "user"
+    ] + [(history, query)]
+    for prior, q in steps:
+        r = comp.compress(q, prior)
+        total.requests += 1
+        total.summary_tokens += r.summary_tokens
+        total.summary_cost_usd += r.summary_cost_usd
+        total.embed_tokens += r.embed_tokens
+    return total

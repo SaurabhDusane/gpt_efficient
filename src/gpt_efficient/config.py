@@ -104,6 +104,9 @@ class EvalConfig(BaseModel):
     request_delay_s: float = 0.0  # pause between items (free-tier rate limits)
     # A cache hit whose judged quality falls below this counts as a wrong hit.
     low_quality: float = 0.5
+    # For multi-turn items under summary/retrieval compression, also replay the
+    # compressor turn by turn and report the amortized per-request cost.
+    amortize_compression: bool = True
 
 
 class Settings(BaseSettings):

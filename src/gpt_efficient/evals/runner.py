@@ -14,6 +14,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from gpt_efficient.cache import SemanticCache
+from gpt_efficient.compressor import replay_overhead
 from gpt_efficient.config import Settings
 from gpt_efficient.engine import Engine
 from gpt_efficient.evals.dataset import EvalItem
@@ -61,6 +62,12 @@ class ItemResult(BaseModel):
     judge_tokens_in: int = 0
     judge_tokens_out: int = 0
     judge_cost_usd: float = 0.0
+    # Tokens / cost per request with compressor overhead averaged over the whole
+    # conversation (turn-by-turn replay). Equal to the one-shot values when there
+    # is nothing to amortize.
+    amortized_tokens: float | None = None
+    amortized_cost_usd: float | None = None
+    amortize_error: str | None = None
 
     @property
     def total_tokens(self) -> int:
@@ -142,6 +149,7 @@ def _run_item(
     row = logger.get(resp.trace_id)
     assert row is not None
     result = ItemResult(**meta, **_from_row(row), answer=resp.text)
+    _amortize(result, item, engine, cfg.amortize_compression, cfg, sleep)
     if item.exact is not None:
         result.exact_match = exact_match(resp.text, item.exact)
     try:
@@ -159,6 +167,26 @@ def _run_item(
     result.judge_tokens_out = verdict.tokens_out
     result.judge_cost_usd = verdict.cost_usd
     return result
+
+
+def _amortize(result: ItemResult, item: EvalItem, engine: Engine, enabled: bool, cfg, sleep) -> None:
+    result.amortized_tokens = float(result.total_tokens)
+    result.amortized_cost_usd = result.cost_usd
+    s = engine.settings
+    if not (enabled and item.history and s.compressor.strategy not in ("none", "truncate")):
+        return
+    try:
+        o = _with_retries(
+            lambda: replay_overhead(s, engine.providers, engine.embedder, item.query, item.history),
+            cfg.max_retries, cfg.retry_backoff_s, sleep,
+        )  # fmt: skip
+    except Exception as exc:
+        result.amortize_error = f"{type(exc).__name__}: {exc}"
+        return
+    n = max(o.requests, 1)
+    answer_cost = s.cost_usd(result.model, result.tokens_in, result.tokens_out)
+    result.amortized_tokens = result.tokens_in + result.tokens_out + (o.summary_tokens + o.embed_tokens) / n
+    result.amortized_cost_usd = answer_cost + (o.summary_cost_usd + s.embedding_cost_usd(o.embed_tokens)) / n
 
 
 def run_eval(
