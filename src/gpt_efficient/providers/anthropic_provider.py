@@ -23,12 +23,22 @@ class AnthropicProvider:
             self._client = anthropic.Anthropic()
         return self._client
 
-    def complete(self, messages: list[Message], max_tokens: int, model: str) -> Completion:
+    def complete(
+        self,
+        messages: list[Message],
+        max_tokens: int,
+        model: str,
+        temperature: float | None = None,
+    ) -> Completion:
         system = "\n\n".join(m.content for m in messages if m.role == "system")
         turns = [{"role": m.role, "content": m.content} for m in messages if m.role != "system"]
         kwargs: dict[str, Any] = {"model": model, "max_tokens": max_tokens, "messages": turns}
         if system:
             kwargs["system"] = system
+        if temperature is not None:
+            # Note: current Claude models (Opus 5, Sonnet 5, Opus 4.7/4.8) reject
+            # sampling params with a 400; leave temperature unset for those.
+            kwargs["temperature"] = temperature
 
         start = time.perf_counter()
         resp = self.client.messages.create(**kwargs)

@@ -14,8 +14,17 @@ from gpt_efficient.schemas import Completion, Message, Vector
 class LLMProvider(Protocol):
     name: str
 
-    def complete(self, messages: list[Message], max_tokens: int, model: str) -> Completion:
-        """Run one completion. A leading `system` message is the system prompt."""
+    def complete(
+        self,
+        messages: list[Message],
+        max_tokens: int,
+        model: str,
+        temperature: float | None = None,
+    ) -> Completion:
+        """Run one completion. A leading `system` message is the system prompt.
+
+        `temperature=None` keeps the provider's default sampling.
+        """
         ...
 
 

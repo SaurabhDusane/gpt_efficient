@@ -38,6 +38,12 @@ class TraceLogger:
                 [data[c] for c in _COLUMNS],
             )
 
+    def get(self, trace_id: str) -> TraceRow | None:
+        with self._connect() as conn:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute("SELECT * FROM traces WHERE id = ?", [trace_id]).fetchone()
+        return TraceRow.model_validate(dict(row)) if row else None
+
     def all(self) -> list[TraceRow]:
         with self._connect() as conn:
             conn.row_factory = sqlite3.Row

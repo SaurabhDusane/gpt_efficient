@@ -26,7 +26,13 @@ class GeminiProvider:
             self._client = genai.Client()  # reads GEMINI_API_KEY / GOOGLE_API_KEY
         return self._client
 
-    def complete(self, messages: list[Message], max_tokens: int, model: str) -> Completion:
+    def complete(
+        self,
+        messages: list[Message],
+        max_tokens: int,
+        model: str,
+        temperature: float | None = None,
+    ) -> Completion:
         system = "\n\n".join(m.content for m in messages if m.role == "system")
         contents = [
             types.Content(role=_ROLES[m.role], parts=[types.Part(text=m.content)])
@@ -35,7 +41,9 @@ class GeminiProvider:
         ]
         # Note: on thinking models max_output_tokens also caps thinking tokens.
         config = types.GenerateContentConfig(
-            system_instruction=system or None, max_output_tokens=max_tokens
+            system_instruction=system or None,
+            max_output_tokens=max_tokens,
+            temperature=temperature,
         )
 
         start = time.perf_counter()
