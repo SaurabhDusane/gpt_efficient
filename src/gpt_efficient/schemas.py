@@ -7,6 +7,9 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 
+type Vector = list[float]
+
+
 class Tier(StrEnum):
     LOCAL = "local"
     MID = "mid"
