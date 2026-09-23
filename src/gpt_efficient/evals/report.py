@@ -3,7 +3,8 @@
 Definitions (also printed in the report):
 - quality: judge score (1-10) mapped to 0-1; mean over judged items.
 - tokens/query: LLM tokens in + out (incl. thinking) + estimated embedding
-  tokens; mean over answered items. Cache hits count 0 LLM tokens.
+  tokens + summarizer tokens; mean over answered items. Cache hits count 0
+  LLM tokens.
 - cost/query: system cost only (LLM + embeddings). Judge cost is separate.
 - failed requests are excluded from quality/token/cost means and counted.
 """
@@ -50,6 +51,8 @@ class ExperimentSummary(BaseModel):
     q_per_usd: float | None
     cache_hits: int
     wrong_cache_hits: int
+    compressed: int
+    mean_tokens_saved: float | None  # history tokens removed per answered query (gross)
     tier_mix: dict[str, int]
     exact_items: int
     exact_acc: float | None
@@ -112,6 +115,8 @@ def summarize(results: list[ItemResult], low_quality: float) -> list[ExperimentS
                 q_per_usd=mean_q / mean_cost if mean_q is not None and mean_cost else None,
                 cache_hits=sum(r.cache_status == CacheStatus.HIT for r in answered),
                 wrong_cache_hits=sum(_is_wrong_hit(r, low_quality) for r in answered),
+                compressed=sum(r.compressed for r in answered),
+                mean_tokens_saved=_mean([float(r.tokens_saved) for r in answered]),
                 tier_mix=dict(Counter(r.tier.value for r in answered)),
                 exact_items=len(exact),
                 exact_acc=_mean([1.0 if r.exact_match else 0.0 for r in exact]),
@@ -273,7 +278,7 @@ def _usd_per_1k(v: float | None) -> str:
 _CSV_FIELDS = [
     "experiment", "n", "answered", "errors", "judged", "judge_errors", "mean_quality",
     "mean_tokens", "mean_cost_usd", "mean_latency_ms", "q_per_1k_tokens", "q_per_usd",
-    "cache_hits", "wrong_cache_hits", "exact_items", "exact_acc",
+    "cache_hits", "wrong_cache_hits", "compressed", "mean_tokens_saved", "exact_items", "exact_acc",
     "judge_exact_disagreements", "judge_cost_usd", "tier_mix",
 ]  # fmt: skip
 
@@ -383,6 +388,23 @@ def _markdown(
     else:
         lines.append("No cache hits.")
 
+    if any(s.compressed for s in summaries):
+        lines += [
+            "",
+            "## Context compression",
+            "",
+            "| experiment | compressed / answered | history tokens saved / query (gross) "
+            "| summarizer tokens / query | tokens / query (net) |",
+            "|---|---|---|---|---|",
+        ]
+        for s in summaries:
+            rows = [r for r in results if r.experiment == s.experiment and r.error is None]
+            summ = _mean([float(r.summary_tokens) for r in rows])
+            lines.append(
+                f"| {s.experiment} | {s.compressed} / {s.answered} | {_fmt(s.mean_tokens_saved, ',.0f')} "
+                f"| {_fmt(summ, ',.0f')} | {_fmt(s.mean_tokens, ',.0f')} |"
+            )
+
     lines += [
         "",
         "## Judge sanity check (exact match)",
@@ -417,8 +439,10 @@ def _markdown(
         "## Definitions",
         "",
         "- **quality**: judge score (1–10) mapped to 0–1 as (score − 1) / 9; mean over judged items.",
-        "- **tokens / query**: LLM input + output (incl. thinking) + estimated embedding tokens; "
-        "mean over answered items. A cache hit spends 0 LLM tokens.",
+        "- **tokens / query**: LLM input + output (incl. thinking) + estimated embedding tokens "
+        "+ summarizer tokens; mean over answered items. A cache hit spends 0 LLM tokens.",
+        "- **tokens saved**: history tokens removed by the compressor (estimate, gross); the "
+        "summarizer's own tokens are already in tokens / query, so that column is net.",
         "- **$ / 1k queries**: system cost (LLM + embeddings) at configured prices; judge cost excluded.",
         "- **quality / 1k tokens** = quality ÷ (tokens/query ÷ 1000); **quality / $** = quality ÷ $/query.",
         "- Failed requests (after retries) are excluded from the means and listed under Failures.",

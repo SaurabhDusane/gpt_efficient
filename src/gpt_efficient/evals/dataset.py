@@ -6,8 +6,10 @@ from typing import Literal
 
 from pydantic import BaseModel, ValidationError
 
+from gpt_efficient.schemas import Message
+
 Difficulty = Literal["easy", "medium", "hard"]
-Category = Literal["factual", "reasoning", "math", "code", "writing"]
+Category = Literal["factual", "reasoning", "math", "code", "writing", "conversation"]
 
 
 class EvalItem(BaseModel):
@@ -24,6 +26,8 @@ class EvalItem(BaseModel):
     paraphrase_of: str | None = None
     # e.g. "near-miss:<id>": similar wording, different answer — a wrong-hit probe.
     tags: list[str] = []
+    # Prior turns sent with the query (multi-turn items; exercises the compressor).
+    history: list[Message] = []
 
 
 def load_dataset(path: Path) -> list[EvalItem]:

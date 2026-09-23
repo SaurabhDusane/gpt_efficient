@@ -46,6 +46,9 @@ class ItemResult(BaseModel):
     tokens_in: int = 0
     tokens_out: int = 0
     embed_tokens: int = 0
+    summary_tokens: int = 0
+    compressed: bool = False
+    tokens_saved: int = 0
     cost_usd: float = 0.0
     latency_ms: float = 0.0
     # judging
@@ -61,7 +64,7 @@ class ItemResult(BaseModel):
 
     @property
     def total_tokens(self) -> int:
-        return self.tokens_in + self.tokens_out + self.embed_tokens
+        return self.tokens_in + self.tokens_out + self.embed_tokens + self.summary_tokens
 
 
 def load_experiments(path: Path) -> list[Experiment]:
@@ -104,7 +107,8 @@ def _from_row(row: TraceRow) -> dict[str, Any]:
         k: getattr(row, k)
         for k in (
             "tier", "provider", "model", "cache_status", "cache_sim", "tokens_in",
-            "tokens_out", "embed_tokens", "cost_usd", "latency_ms",
+            "tokens_out", "embed_tokens", "summary_tokens", "compressed", "tokens_saved",
+            "cost_usd", "latency_ms",
         )
     }  # fmt: skip
 
@@ -129,7 +133,7 @@ def _run_item(
     }
     try:
         resp = _with_retries(
-            lambda: engine.ask(item.query), cfg.max_retries, cfg.retry_backoff_s, sleep
+            lambda: engine.ask(item.query, item.history), cfg.max_retries, cfg.retry_backoff_s, sleep
         )
     except Exception as exc:
         # The engine logged a row for the failed attempt; report its fields.
@@ -194,7 +198,7 @@ def run_eval(
             settings,
             make_providers(settings),
             logger,
-            embedder=make_embedder(settings) if cache_on else None,
+            embedder=make_embedder(settings) if settings.needs_embedder else None,
             cache=SemanticCache(settings.cache.db) if cache_on else None,
         )
         for i, item in enumerate(items):
