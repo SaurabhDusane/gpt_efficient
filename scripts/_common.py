@@ -1,7 +1,5 @@
 """Shared helpers for the scripts/*_delta.py savings scripts."""
 
-import hashlib
-import math
 from pathlib import Path
 
 from rich.console import Console
@@ -10,49 +8,10 @@ from rich.table import Table
 from gpt_efficient.cache import SemanticCache
 from gpt_efficient.config import Settings
 from gpt_efficient.engine import Engine
+from gpt_efficient.fakes import FakeEmbedder, FakeProvider
 from gpt_efficient.providers import build_embedder, build_providers
-from gpt_efficient.schemas import CacheStatus, Completion, Message, TraceRow
+from gpt_efficient.schemas import CacheStatus, TraceRow
 from gpt_efficient.trace import TraceLogger
-
-
-class FakeProvider:
-    """Deterministic stand-in; cost still comes from configured per-model prices."""
-
-    name = "fake"
-
-    def __init__(self, settings: Settings) -> None:
-        self.settings = settings
-
-    def complete(self, messages: list[Message], max_tokens: int, model: str) -> Completion:
-        tokens_in = sum(len(m.content.split()) for m in messages) * 2
-        tokens_out = 60
-        return Completion(
-            text=f"(fake answer to: {messages[-1].content})",
-            tokens_in=tokens_in,
-            tokens_out=tokens_out,
-            cost_usd=self.settings.cost_usd(model, tokens_in, tokens_out),
-            latency_ms=0.0,
-            model=model,
-        )
-
-
-class FakeEmbedder:
-    """Bag-of-words hashing embedder: exact repeats match, paraphrases only loosely."""
-
-    name = "fake"
-
-    def __init__(self, dim: int) -> None:
-        self.dim = dim
-
-    def embed(self, texts: list[str]) -> list[list[float]]:
-        out = []
-        for t in texts:
-            v = [0.0] * self.dim
-            for w in t.lower().split():
-                v[int(hashlib.md5(w.encode()).hexdigest(), 16) % self.dim] += 1.0
-            n = math.sqrt(sum(x * x for x in v)) or 1.0
-            out.append([x / n for x in v])
-        return out
 
 
 def load_queries(path: Path | None, default: list[str]) -> list[str]:
