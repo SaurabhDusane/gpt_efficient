@@ -47,10 +47,13 @@ Single interface; provider SDKs must not leak past the adapter layer.
 ```python
 class LLMProvider(Protocol):
     name: str
-    def complete(self, messages: list[Message], max_tokens: int, model: str) -> Completion: ...
+    def complete(self, messages: list[Message], max_tokens: int, model: str,
+                 temperature: float | None = None) -> Completion: ...
 
 # A leading role="system" message carries the system prompt; each adapter maps it
 # to its SDK's convention. `model` is passed per call since one adapter serves several models.
+# temperature=None keeps the provider default (the eval judge uses 0). Note: current
+# Claude models (Opus 5, Sonnet 5, Opus 4.7/4.8) reject sampling params — leave it None there.
 
 # Completion: text, tokens_in, tokens_out, cost_usd, latency_ms, model
 # tokens_out includes thinking/reasoning tokens (they are billed as output).
@@ -126,10 +129,18 @@ Fields: `id, ts, query_hash, cache_status, cache_sim, tier, provider, model, tok
 
 Without this, every optimization is blind. It is a Phase 1 deliverable, not a final step.
 
+Implemented (milestone 5) — `gpte eval [--only a,b] [--limit N] [--fake]`, code in `src/gpt_efficient/evals/`:
+- **Dataset** (`evals/seed.jsonl`, 42 hand-written items): `id, query, reference, difficulty (easy|medium|hard), category (factual|reasoning|math|code|writing), exact?, paraphrase_of?, tags`. Includes paraphrase pairs (cache-hit probes, must follow their original) and `near-miss:<id>` items (similar wording, different answer — wrong-hit probes). Open-ended items' references list key points/constraints.
+- **Judge**: `gemini-2.5-pro` (config `[judge]`), temperature 0, not part of the answer ladder so no model grades its own output. Rubric `v1` in `evals/judge.py`: 1–10, correctness dominant (a significant error caps at 4, a wrong final answer at 2), then completeness, then concision; length never rewarded. Blind: sees only question, reference and candidate. Quality = (score − 1) / 9.
+- **Exact match**: lenient deterministic containment check (numeric-aware) on items with `exact`; a sanity check on the judge, not a score. Report lists judge/exact disagreements.
+- **Runner**: each experiment in `evals/experiments.toml` = config.toml + deep-merged overrides, validated before anything runs; fresh trace + cache DB per experiment under `results/<run>/<experiment>/` (cache hits only from earlier items in the same run). Transient errors retried with backoff (`[eval]`); failed requests are excluded from means and counted.
+- **Metric / report**: per experiment mean quality vs. mean tokens/query (LLM in + out incl. thinking + estimated embedding) and vs. system $/query — two efficiency-frontier plots, plus quality per 1k tokens and quality per $, a by-difficulty breakdown, cache hits with similarity and **wrong hits** (hit with quality < `eval.low_quality`), and judge sanity stats. Judge cost is reported separately, never charged to a config. Outputs: `report.md`, `summary.csv`, `results.jsonl`, `frontier_tokens.png`, `frontier_cost.png`.
+- `--fake` runs everything offline with deterministic fakes (`gpt_efficient/fakes.py`); its numbers are illustrative only and the report says so.
+
 ---
 
 ## 4. Configuration
-All experiment knobs in one `config.toml` (or pydantic-settings): default provider, tier→model map, active tier set (`tier_mode`), router type + heuristic weights/cutoffs, per-model pricing (incl. long-context rates), embedding model/dim/price, cache threshold, compressor limits, router type, judge model. Changing a config value and re-running the harness = one experiment.
+All experiment knobs in one `config.toml` (or pydantic-settings): default provider, tier→model map, active tier set (`tier_mode`), router type + heuristic weights/cutoffs, judge model/temperature, eval dataset/experiments/retries, per-model pricing (incl. long-context rates), embedding model/dim/price, cache threshold, compressor limits, router type, judge model. Changing a config value and re-running the harness = one experiment.
 
 ---
 
