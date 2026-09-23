@@ -173,7 +173,9 @@ Each is a discrete, testable unit. Do not start the next until the current one's
 5. **Eval harness** — dataset loader, LLM-judge, quality-per-token report. *Test: report generated over a small dataset.*
 6. **Context compressor** — rolling summary + retrieval. *Test: long history → fewer tokens, quality held.*
 7. **Learned router** — classifier; benchmark vs. heuristic on the harness. *Test: frontier plot compares both routers.*
-8. **Results notebook** — efficiency-frontier plots and writeup.
+8. **Results notebook** — efficiency-frontier plots and writeup. *Test: notebook runs end to end on (fake) eval runs and writes figures + findings flagged ILLUSTRATIVE; statistics checked exactly.*
+
+   Implemented: `analysis.py` (pure; all numbers), `notebooks/results.ipynb` (thin display + exploration), `gpte findings` (same output without Jupyter). A manifest (`[analysis] manifest`) maps roles to run dirs: `routing` (seed.jsonl run → RQ1–RQ3) and `compression` (conversations.jsonl run → RQ4). Method: 95% paired percentile bootstrap over items (`n_boot`, `seed`); a config **holds quality** if the lower CI bound of (config − reference) quality is > −`margin` (0.05); reference = first of `reference_order` present (`fixed-frontier`, else `fixed-mid`). Every eval run writes `run.json` (fake flag, dataset, experiments, judge, rubric version, git commit); fake runs are marked ILLUSTRATIVE in every section. Interpretation paragraphs are TODOs for a human — only data-derived statements (e.g. "cheapest config that held quality") are generated.
 
 UI: thin CLI (Rich/Textual) from milestone 1; web UI only after the engine is solid.
 
