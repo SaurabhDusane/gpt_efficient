@@ -6,6 +6,7 @@ GPTE_* environment variables, then explicit constructor kwargs (highest).
 
 import os
 from pathlib import Path
+from typing import Literal
 
 from pydantic import BaseModel, model_validator
 from pydantic_settings import (
@@ -43,6 +44,33 @@ class CacheConfig(BaseModel):
     version: str = "1"
 
 
+class HeuristicRouterConfig(BaseModel):
+    """Points per signal; the summed score is compared against tier_cutoffs."""
+
+    long_query_words: int = 40
+    very_long_query_words: int = 150
+    length_points: float = 1.0  # awarded once per length threshold crossed
+    keywords: list[str] = [
+        "prove", "proof", "derive", "derivation", "analyze", "analyse", "compare",
+        "contrast", "design", "architecture", "optimize", "optimise", "debug",
+        "refactor", "trade-off", "tradeoff", "step by step", "explain why",
+        "in depth", "algorithm", "complexity", "rigorous", "formally",
+    ]  # fmt: skip
+    keyword_points: float = 1.0  # per distinct keyword found
+    max_keyword_points: float = 2.0
+    code_points: float = 2.0
+    math_points: float = 2.0
+    # Minimum score for each tier above the cheapest; the cheapest active tier
+    # is the floor. The highest active tier whose cutoff the score meets wins.
+    tier_cutoffs: dict[Tier, float] = {Tier.MID: 1.0, Tier.FRONTIER: 3.0}
+
+
+class RouterConfig(BaseModel):
+    # "fixed" always uses default_tier (the pre-router baseline).
+    type: Literal["fixed", "heuristic"] = "fixed"
+    heuristic: HeuristicRouterConfig = HeuristicRouterConfig()
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="GPTE_", env_nested_delimiter="__")
 
@@ -61,6 +89,7 @@ class Settings(BaseSettings):
     # The embed API returns no token counts, so embed_tokens is estimated.
     embedding_chars_per_token: float = 4.0
     cache: CacheConfig = CacheConfig()
+    router: RouterConfig = RouterConfig()
     system_prompt: str = "You are a helpful assistant."
     max_tokens: int = 1024
     trace_db: Path = Path("data/traces.db")
