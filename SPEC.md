@@ -110,15 +110,25 @@ Implemented (milestone 4):
 - Config: max history tokens, summary trigger threshold.
 - Log tokens saved per request.
 
+Implemented (milestone 6) — `compressor.py`, config `[compressor]`:
+- A turn = one user+assistant exchange. When the history estimate (chars / `chars_per_token`) exceeds `trigger_tokens` (default 1500), the last `keep_recent_turns` (4) exchanges stay verbatim and older ones are replaced per `strategy`: `none` | `truncate` (dropped — the naive baseline) | `summary` (rolling summary) | `retrieval` (top-`retrieve_k` (3) older exchanges by embedding similarity to the query, in conversation order) | `summary+retrieval`. Summary/excerpts are sent as `system` messages before the verbatim turns.
+- The summary is written by the `summary_tier` model (default `local`, the budget tier), capped at `summary_max_tokens`. "Rolling": summaries are stored by the exact older exchanges they cover, so a growing conversation only summarizes its new exchanges; retrieval likewise embeds each exchange once per conversation. Both stores are in-memory per Engine.
+- Accounting: `compressed`, `tokens_saved` (gross history-estimate delta), `summary_tokens` (summarizer in + out); summarizer cost and retrieval embedding tokens are included in `cost_usd` / `embed_tokens`, so eval tokens/query is net.
+- Runs after the cache (history requests bypass the cache, so compressor config needn't be in the cache namespace) and before the router.
+- Eval: `evals/conversations.jsonl` (10 hand-written conversations, 15–19 exchanges, all above the trigger) with probes tagged `needle:early`, `needle:middle`, `aggregate`, `recent-only` (+ one `correction`); strategies are experiments in `evals/experiments_compression.toml`. `scripts/compress_delta.py` shows the token/cost delta.
+- Caveat: eval items are independent requests, so each pays the full one-shot cost of summarizing/embedding its older history (no reuse across turns). That is the worst case for summary/retrieval; in live chat the rolling stores amortize it.
+- LLMLingua prompt compression is not implemented (optional comparison point, deferred).
+
 ### 3.6 Trace logger
 One row per request. Pydantic schema, written to SQLite (and/or JSONL).
 
-Fields: `id, ts, query_hash, cache_status, cache_sim, tier, provider, model, tokens_in, tokens_out, cost_usd, latency_ms, compressed (bool), tokens_saved, escalated (bool), response_len, embed_tokens, error`.
+Fields: `id, ts, query_hash, cache_status, cache_sim, tier, provider, model, tokens_in, tokens_out, cost_usd, latency_ms, compressed (bool), tokens_saved, escalated (bool), response_len, embed_tokens, summary_tokens, error`.
 
 - `cache_status`: `hit` | `miss` | `bypass` (cache on but not consulted) | `disabled`.
 - `tokens_in` / `tokens_out` are LLM tokens only: `tokens_in` includes any prompt-cache reads/writes, `tokens_out` includes thinking tokens.
-- `embed_tokens` is the (estimated, `chars / embedding_chars_per_token`) size of the text embedded for the cache lookup — Gemini's embed API reports no counts.
-- `cost_usd` = LLM cost + embedding cost; `latency_ms` is end-to-end (embed + lookup + LLM).
+- `embed_tokens` is the (estimated, `chars / embedding_chars_per_token`) size of text embedded for the cache lookup and compressor retrieval — Gemini's embed API reports no counts.
+- `compressed` / `tokens_saved` / `summary_tokens`: whether the compressor shrank the history, the estimated history tokens removed (gross), and the summarizer's tokens in + out.
+- `cost_usd` = LLM cost + summarizer cost + embedding cost; `latency_ms` is end-to-end (embed + lookup + LLM).
 - `error` is null on success; failed requests still emit their row with the exception recorded.
 
 ### 3.7 Eval harness — build early, not last
@@ -140,7 +150,7 @@ Implemented (milestone 5) — `gpte eval [--only a,b] [--limit N] [--fake]`, cod
 ---
 
 ## 4. Configuration
-All experiment knobs in one `config.toml` (or pydantic-settings): default provider, tier→model map, active tier set (`tier_mode`), router type + heuristic weights/cutoffs, judge model/temperature, eval dataset/experiments/retries, per-model pricing (incl. long-context rates), embedding model/dim/price, cache threshold, compressor limits, router type, judge model. Changing a config value and re-running the harness = one experiment.
+All experiment knobs in one `config.toml` (or pydantic-settings): default provider, tier→model map, active tier set (`tier_mode`), router type + heuristic weights/cutoffs, compressor strategy/trigger/window/k/summary tier, judge model/temperature, eval dataset/experiments/retries, per-model pricing (incl. long-context rates), embedding model/dim/price, cache threshold, compressor limits, router type, judge model. Changing a config value and re-running the harness = one experiment.
 
 ---
 
