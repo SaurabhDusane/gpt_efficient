@@ -1,4 +1,4 @@
-"""Request pipeline. Milestone 1: default tier -> provider -> trace.
+"""Request pipeline. So far: default tier -> provider -> trace.
 
 Cache, compressor and router slot in here in later milestones.
 """
