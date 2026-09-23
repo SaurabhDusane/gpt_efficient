@@ -1,0 +1,24 @@
+[project]
+name = "gpt-efficient"
+version = "0.1.0"
+description = "Chat assistant optimized for quality per token, with an efficiency benchmark."
+requires-python = ">=3.12"
+dependencies = [
+    "anthropic>=1.8.0",
+    "pydantic>=2.13.5",
+    "pydantic-settings>=2.15.0",
+    "python-dotenv>=1.2.3",
+    "rich>=15.0.0",
+]
+
+[project.scripts]
+gpte = "gpt_efficient.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.8.17,<0.9.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
