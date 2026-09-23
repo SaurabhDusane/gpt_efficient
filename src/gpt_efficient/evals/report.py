@@ -57,6 +57,8 @@ class ExperimentSummary(BaseModel):
     mean_tokens_amortized: float | None
     mean_cost_amortized: float | None
     tier_mix: dict[str, int]
+    mean_route_confidence: float | None  # learned router only
+    escalations: int  # routed one tier above the router's prediction
     exact_items: int
     exact_acc: float | None
     judge_exact_disagreements: int
@@ -129,6 +131,10 @@ def summarize(results: list[ItemResult], low_quality: float) -> list[ExperimentS
                      for r in answered]
                 ),  # fmt: skip
                 tier_mix=dict(Counter(r.tier.value for r in answered)),
+                mean_route_confidence=_mean(
+                    [r.route_confidence for r in answered if r.route_confidence is not None]
+                ),
+                escalations=sum(r.escalated for r in answered),
                 exact_items=len(exact),
                 exact_acc=_mean([1.0 if r.exact_match else 0.0 for r in exact]),
                 judge_exact_disagreements=sum(_disagrees(r) for r in answered),
@@ -290,7 +296,7 @@ _CSV_FIELDS = [
     "experiment", "n", "answered", "errors", "judged", "judge_errors", "mean_quality",
     "mean_tokens", "mean_cost_usd", "mean_latency_ms", "q_per_1k_tokens", "q_per_usd",
     "cache_hits", "wrong_cache_hits", "compressed", "mean_tokens_saved", "mean_tokens_amortized", "mean_cost_amortized", "exact_items", "exact_acc",
-    "judge_exact_disagreements", "judge_cost_usd", "tier_mix",
+    "judge_exact_disagreements", "judge_cost_usd", "mean_route_confidence", "escalations", "tier_mix",
 ]  # fmt: skip
 
 
@@ -401,6 +407,24 @@ def _markdown(
                 else ["—", "—", "—"]
             )
         lines.append(f"| {s.experiment} | " + " | ".join(cells) + " |")
+
+    lines += [
+        "",
+        "## Routing",
+        "",
+        "Tier mix counts the tier that produced each answer (a cache hit counts as the tier "
+        "that wrote the cached answer). Confidence and escalations apply to the learned router.",
+        "",
+        "| experiment | router | local | mid | frontier | mean confidence | escalations |",
+        "|---|---|---|---|---|---|---|",
+    ]
+    for s in summaries:
+        kind = "learned" if s.mean_route_confidence is not None else "—"
+        mix = [str(s.tier_mix.get(t, 0)) for t in ("local", "mid", "frontier")]
+        lines.append(
+            f"| {s.experiment} | {kind} | {' | '.join(mix)} "
+            f"| {_fmt(s.mean_route_confidence, '.2f')} | {s.escalations} |"
+        )
 
     hits = [r for r in results if r.cache_status == CacheStatus.HIT and r.error is None]
     lines += ["", "## Cache hits", ""]

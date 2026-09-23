@@ -50,6 +50,8 @@ class ItemResult(BaseModel):
     summary_tokens: int = 0
     compressed: bool = False
     tokens_saved: int = 0
+    route_confidence: float | None = None
+    escalated: bool = False
     cost_usd: float = 0.0
     latency_ms: float = 0.0
     # judging
@@ -115,7 +117,7 @@ def _from_row(row: TraceRow) -> dict[str, Any]:
         for k in (
             "tier", "provider", "model", "cache_status", "cache_sim", "tokens_in",
             "tokens_out", "embed_tokens", "summary_tokens", "compressed", "tokens_saved",
-            "cost_usd", "latency_ms",
+            "route_confidence", "escalated", "cost_usd", "latency_ms",
         )
     }  # fmt: skip
 
@@ -205,6 +207,12 @@ def run_eval(
     out_dir = Path(out_dir)
     # Validate every experiment's config before spending anything.
     configured = [(e, apply_overrides(base, e.overrides)) for e in experiments]
+    for e, s in configured:
+        if s.router.type == "learned" and not s.router.learned.model_path.exists():
+            raise FileNotFoundError(
+                f"experiment {e.name!r} needs a learned router model at {s.router.learned.model_path}; "
+                "run `gpte router label` and `gpte router train` first"
+            )
     out_dir.mkdir(parents=True, exist_ok=True)
     stream = out_dir / "results.jsonl"
 
