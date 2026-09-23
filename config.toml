@@ -29,6 +29,33 @@ db = "data/cache.db"
 embed_template = "{text}"  # raw query; a task-prefix variant is a later experiment
 version = "1"  # bump to invalidate all cached answers
 
+# Router (milestone 4). "fixed" = always default_tier (the pre-router baseline);
+# "heuristic" = length + complexity keywords + code/math presence -> tier.
+[router]
+type = "heuristic"
+
+# Untuned baseline weights: the learned router (milestone 7) has to beat this.
+[router.heuristic]
+long_query_words = 40
+very_long_query_words = 150
+length_points = 1.0          # per length threshold crossed
+keyword_points = 1.0         # per distinct keyword (plurals match too)
+max_keyword_points = 2.0
+code_points = 2.0
+math_points = 2.0
+keywords = [
+    "prove", "proof", "derive", "derivation", "analyze", "analyse", "compare",
+    "contrast", "design", "architecture", "optimize", "optimise", "debug",
+    "refactor", "trade-off", "tradeoff", "step by step", "explain why",
+    "in depth", "algorithm", "complexity", "rigorous", "formally",
+]
+
+# Minimum score per tier; the cheapest active tier is the floor. In tier_mode
+# "two", scores above the mid cutoff stay on mid.
+[router.heuristic.tier_cutoffs]
+mid = 1.0
+frontier = 3.0
+
 [tier_modes]
 two = ["local", "mid"]
 three = ["local", "mid", "frontier"]
