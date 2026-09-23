@@ -6,3 +6,5 @@ __pycache__/
 data/
 # eval runs: keep reports/plots/results, not the per-experiment databases
 results/**/*.db
+# offline (fake) router models are illustrative only
+models/*-fake.json

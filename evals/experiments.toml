@@ -61,3 +61,22 @@ description = "Heuristic router over three tiers with the semantic cache"
 tier_mode = "three"
 router = { type = "heuristic" }
 cache = { enabled = true }
+
+# --- learned router (milestone 7). Needs a trained model: `gpte router label` then
+# `gpte router train` (writes router.learned.model_path). Compare against "heuristic".
+
+[[experiment]]
+name = "learned"
+description = "Learned router over three tiers, no cache"
+[experiment.overrides]
+tier_mode = "three"
+router = { type = "learned" }
+cache = { enabled = false }
+
+[[experiment]]
+name = "learned-two"
+description = "Learned router over the free-tier pair, no cache (compare with heuristic-two)"
+[experiment.overrides]
+tier_mode = "two"
+router = { type = "learned" }
+cache = { enabled = false }

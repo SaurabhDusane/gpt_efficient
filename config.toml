@@ -56,6 +56,18 @@ keywords = [
 mid = 1.0
 frontier = 3.0
 
+# Learned router (milestone 7): logistic regression on the query embedding.
+# Pipeline: `gpte router label` (every active tier answers each training query; the
+# judge grades cheaper tiers against the top tier's answer) -> `gpte router train`.
+[router.learned]
+model_path = "models/router.json"
+confidence_threshold = 0.6   # below this, route one tier above the prediction
+escalate = true
+label_min_score = 8          # a cheaper tier "suffices" at >= 8/10 vs. the top tier
+train_data = "evals/router_train.jsonl"   # disjoint from every eval set (tested)
+labels_path = "evals/router_labels.jsonl"
+C = 1.0                      # inverse regularization strength
+
 # Context compressor (milestone 6). Applies only to requests with history.
 # A turn = one user+assistant exchange. Strategies: none | truncate | summary |
 # retrieval | summary+retrieval. Summary/retrieval context is added as system messages.
