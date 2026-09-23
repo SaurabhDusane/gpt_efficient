@@ -1,6 +1,6 @@
-"""Request pipeline. So far: semantic cache -> default tier -> provider -> trace.
+"""Request pipeline. So far: semantic cache -> router -> provider -> trace.
 
-Compressor and router slot in here in later milestones.
+The compressor slots in between cache and router in a later milestone.
 """
 
 import time
@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 from gpt_efficient.cache import CacheEntry, SemanticCache, cache_namespace, estimate_tokens
 from gpt_efficient.config import Settings
 from gpt_efficient.providers.base import Embedder, LLMProvider
+from gpt_efficient.router import Router, build_router
 from gpt_efficient.schemas import CacheStatus, Message, Response, TraceRow
 from gpt_efficient.trace import TraceLogger, query_hash
 
@@ -22,6 +23,7 @@ class Engine:
         logger: TraceLogger,
         embedder: Embedder | None = None,
         cache: SemanticCache | None = None,
+        router: Router | None = None,
     ) -> None:
         if settings.cache.enabled and (embedder is None or cache is None):
             raise ValueError("cache.enabled requires an embedder and a SemanticCache")
@@ -30,10 +32,12 @@ class Engine:
         self.logger = logger
         self.embedder = embedder
         self.cache = cache
+        self.router = router or build_router(settings)
         self.namespace = cache_namespace(settings)
 
     def ask(self, query: str, history: list[Message] | None = None) -> Response:
         """Answer one query. Always logs exactly one trace row, even on failure."""
+        # Placeholder until the router runs (it only runs on a cache miss).
         tier = self.settings.default_tier
         target = self.settings.target(tier)
         row = TraceRow(
@@ -77,6 +81,10 @@ class Engine:
                 row.tier, row.provider, row.model = entry.tier, entry.provider, entry.model
                 row.response_len = len(entry.response)
                 return entry.response
+
+        decision = self.router.route(query, history)
+        target = self.settings.target(decision.tier)
+        row.tier, row.provider, row.model = decision.tier, target.provider, target.model
 
         messages = [
             Message(role="system", content=self.settings.system_prompt),

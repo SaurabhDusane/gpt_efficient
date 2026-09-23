@@ -49,9 +49,19 @@ def cache_namespace(settings: Settings) -> str:
         "embedding_model": settings.embedding_model,
         "embedding_dim": settings.embedding_dim,
         "embed_template": settings.cache.embed_template,
+        # The router decides which tier answers, so its config changes answers.
+        "router": _router_key(settings),
     }
     blob = json.dumps(key, sort_keys=True, default=str)
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:16]
+
+
+def _router_key(settings: Settings) -> dict[str, object]:
+    r = settings.router
+    key: dict[str, object] = {"type": r.type}
+    if r.type == "heuristic":  # only the active router's params matter
+        key["heuristic"] = r.heuristic.model_dump(mode="json")
+    return key
 
 
 def estimate_tokens(text: str, chars_per_token: float) -> int:
