@@ -56,6 +56,18 @@ keywords = [
 mid = 1.0
 frontier = 3.0
 
+# Context compressor (milestone 6). Applies only to requests with history.
+# A turn = one user+assistant exchange. Strategies: none | truncate | summary |
+# retrieval | summary+retrieval. Summary/retrieval context is added as system messages.
+[compressor]
+strategy = "summary+retrieval"
+trigger_tokens = 1500     # compress when the history estimate exceeds this
+keep_recent_turns = 4     # always sent verbatim
+retrieve_k = 3            # older turns retrieved by embedding similarity
+summary_tier = "local"    # the budget tier's model writes the rolling summary
+summary_max_tokens = 400
+chars_per_token = 4.0     # for history estimates and tokens_saved
+
 # Eval harness (milestone 5). The judge only grades; it never answers queries.
 [judge]
 model = "gemini-2.5-pro"  # not in the answer ladder, so no model grades itself

@@ -1,0 +1,49 @@
+# Context-compression experiments. Run on the multi-turn dataset:
+#   gpte eval --dataset evals/conversations.jsonl --experiments evals/experiments_compression.toml
+# Routing and cache are held fixed (mid tier, no cache) so only compression varies.
+# Summaries are written by the compressor.summary_tier model (budget tier by default).
+
+[[experiment]]
+name = "no-compression"
+description = "Full history sent as-is: the baseline"
+[experiment.overrides]
+default_tier = "mid"
+router = { type = "fixed" }
+cache = { enabled = false }
+compressor = { strategy = "none" }
+
+[[experiment]]
+name = "truncate"
+description = "Keep only the recent turns: the naive baseline"
+[experiment.overrides]
+default_tier = "mid"
+router = { type = "fixed" }
+cache = { enabled = false }
+compressor = { strategy = "truncate" }
+
+[[experiment]]
+name = "summary"
+description = "Recent turns + rolling summary of older turns"
+[experiment.overrides]
+default_tier = "mid"
+router = { type = "fixed" }
+cache = { enabled = false }
+compressor = { strategy = "summary" }
+
+[[experiment]]
+name = "retrieval"
+description = "Recent turns + older turns most similar to the query"
+[experiment.overrides]
+default_tier = "mid"
+router = { type = "fixed" }
+cache = { enabled = false }
+compressor = { strategy = "retrieval" }
+
+[[experiment]]
+name = "summary+retrieval"
+description = "Recent turns + summary + retrieved older turns (the spec's design)"
+[experiment.overrides]
+default_tier = "mid"
+router = { type = "fixed" }
+cache = { enabled = false }
+compressor = { strategy = "summary+retrieval" }
