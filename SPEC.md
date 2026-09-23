@@ -53,17 +53,26 @@ class LLMProvider(Protocol):
 # to its SDK's convention. `model` is passed per call since one adapter serves several models.
 
 # Completion: text, tokens_in, tokens_out, cost_usd, latency_ms, model
+# tokens_out includes thinking/reasoning tokens (they are billed as output).
+
+class Embedder(Protocol):
+    name: str
+    def embed(self, texts: list[str]) -> list[Vector]: ...   # Vector = list[float]
 ```
 
-Adapters (MVP): **Anthropic** (Haiku / Sonnet / Opus), **OpenAI** (small / large), **Ollama** (local small model, e.g. llama3.2 or qwen2.5). Router selects a `(provider, model)` tier; everything downstream is provider-agnostic.
+Embeddings are a **separate `Embedder` protocol**, not a method on `LLMProvider`: the embedding backend may differ from the completion provider, and cache/router/compressor depend only on `Embedder`. Embedding model, dimensionality and price come from config.
+
+Adapters (current): **Gemini** (`google-genai`; Flash-Lite / Flash / Pro + `gemini-embedding-2`) is the default provider. **Anthropic** (Haiku / Sonnet / Opus) is implemented but unused until keys are available. **OpenAI** and **Ollama** are deferred (see §7). Router selects a `(provider, model)` tier; everything downstream is provider-agnostic.
 
 ### 3.2 Tiers
 Abstract "tier" decouples routing from providers:
-- `LOCAL`  — Ollama small model (near-zero marginal cost)
-- `MID`    — cheap hosted (Haiku / gpt small)
-- `FRONTIER` — Sonnet/Opus / gpt large
+- `LOCAL`  — budget tier. Currently Gemini Flash-Lite; becomes an Ollama small model (near-zero marginal cost) once that adapter lands
+- `MID`    — cheap hosted (Gemini Flash; later Haiku / gpt small)
+- `FRONTIER` — Gemini Pro (later Sonnet/Opus / gpt large)
 
 Tier→model mapping lives in config so experiments can swap models without code changes.
+
+The **active tier set** is also config: `tier_mode` selects an entry of `[tier_modes]` (`two` = local + mid, both on Gemini's free tier; `three` adds the paid Pro frontier tier). Router and engine read the active set from config and never assume three tiers.
 
 ### 3.3 Semantic cache
 - Embed incoming query, cosine-match against stored `(embedding, response)` pairs.
@@ -102,7 +111,7 @@ Without this, every optimization is blind. It is a Phase 1 deliverable, not a fi
 ---
 
 ## 4. Configuration
-All experiment knobs in one `config.toml` (or pydantic-settings): tier→model map, cache threshold, compressor limits, router type, judge model. Changing a config value and re-running the harness = one experiment.
+All experiment knobs in one `config.toml` (or pydantic-settings): default provider, tier→model map, active tier set (`tier_mode`), per-model pricing (incl. long-context rates), embedding model/dim/price, cache threshold, compressor limits, router type, judge model. Changing a config value and re-running the harness = one experiment.
 
 ---
 
@@ -110,7 +119,7 @@ All experiment knobs in one `config.toml` (or pydantic-settings): tier→model m
 Each is a discrete, testable unit. Do not start the next until the current one's test passes.
 
 1. **Scaffold** — repo, `LLMProvider` interface, Anthropic adapter, trace logger. *Test: one query end-to-end, one logged trace row.*
-2. **Providers** — OpenAI + Ollama adapters behind the same interface. *Test: same query across all three, traces logged.*
+2. **Gemini provider + embeddings** — Gemini adapter behind `LLMProvider`, `Embedder` protocol + Gemini embedder, two/three-tier switch. *Test: mocked Gemini call → correct `Completion` (thinking counted as output, cost from config); mocked embed → right count/dimension of vectors.* (Originally OpenAI + Ollama; revised because only a Gemini key is available — see §7.)
 3. **Semantic cache** — embed + vector store, tunable threshold, sim logging. *Test: repeat/paraphrased query → cache hit.*
 4. **Heuristic router** — baseline tier selection. *Test: easy vs. hard query pick different tiers.*
 5. **Eval harness** — dataset loader, LLM-judge, quality-per-token report. *Test: report generated over a small dataset.*
@@ -126,7 +135,7 @@ UI: thin CLI (Rich/Textual) from milestone 1; web UI only after the engine is so
 - Python 3.12, `uv` for env/deps
 - pydantic / pydantic-settings for schemas + config
 - SQLite (+ `sqlite-vec`) for traces and cache
-- Anthropic + OpenAI SDKs; Ollama via HTTP
+- `google-genai` (Gemini) now; Anthropic SDK (adapter ready); OpenAI SDK + Ollama via HTTP later
 - Rich/Textual CLI; matplotlib/plotly for plots; Jupyter for the results notebook
 
 ---
@@ -136,3 +145,5 @@ UI: thin CLI (Rich/Textual) from milestone 1; web UI only after the engine is so
 - Streaming responses (add after engine works)
 - Fine-tuning models (routing/compression only)
 - A polished web UI before the benchmark exists
+
+**Deferred, not dropped:** multi-provider (Anthropic + OpenAI + local Ollama). Until those keys are available (~1 month), the whole project — completions, embeddings and the eval judge — runs on Gemini alone. Because everything sits behind `LLMProvider` / `Embedder`, adding those adapters later is additive: a new adapter file plus config entries. Cross-provider comparisons in the results are out of scope until then.

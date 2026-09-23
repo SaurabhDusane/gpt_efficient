@@ -8,9 +8,15 @@ A chat assistant optimized for **quality per token**, plus a benchmark that meas
 ## Golden rules
 1. **One milestone at a time.** Work the milestones in `SPEC.md` §5 in order. Do not scaffold future milestones early. Stop after each and let me verify.
 2. **Write the test first, then the code, then run the test.** Every milestone in the spec has a defined test — satisfy exactly that before moving on.
-3. **No provider SDK leaks.** Anthropic/OpenAI/Ollama specifics live only inside their adapter. Everything else talks to the `LLMProvider` interface.
+3. **No provider SDK leaks.** Gemini/Anthropic/OpenAI/Ollama specifics live only inside their adapter (`providers/<name>_provider.py`). Everything else talks to the `LLMProvider` and `Embedder` interfaces.
 4. **Every request emits one trace row.** If a code path can answer a query without logging a trace, that's a bug.
-5. **Config over constants.** Anything an experiment would vary (cache threshold, tier→model map, router type, history limits) goes in config, never hardcoded.
+5. **Config over constants.** Anything an experiment would vary (cache threshold, tier→model map, active tier set, prices, embedding model, router type, history limits) goes in config, never hardcoded.
+
+## Architecture decisions
+- **Provider:** Gemini is the only live provider for now (`default_provider = "gemini"`). Anthropic/OpenAI/Ollama are deferred, not dropped (SPEC §7).
+- **Embeddings:** separate `Embedder` protocol (`providers/base.py`), not an `embed()` method on `LLMProvider` — embeddings and completions may come from different providers. Build via `providers.build_embedder(settings)`; never import an SDK for embeddings elsewhere.
+- **Tier set:** `tier_mode` in `config.toml` picks a list from `[tier_modes]` (`two` = free-tier Flash-Lite + Flash, `three` adds paid Pro). Read it via `Settings.active_tiers`; never assume the number of tiers.
+- **Token accounting:** `tokens_out` includes thinking tokens on every provider; `tokens_in` includes cached-prompt tokens.
 
 ## Workflow expectations
 - Before writing code for a milestone, restate the milestone's goal and its test in one line, then list the files you'll create/change. Wait for nothing if it's within the current milestone; just proceed.
