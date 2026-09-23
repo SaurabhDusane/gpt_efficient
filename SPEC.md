@@ -47,23 +47,35 @@ Single interface; provider SDKs must not leak past the adapter layer.
 ```python
 class LLMProvider(Protocol):
     name: str
-    def complete(self, messages: list[Message], max_tokens: int, model: str) -> Completion: ...
+    def complete(self, messages: list[Message], max_tokens: int, model: str,
+                 temperature: float | None = None) -> Completion: ...
 
 # A leading role="system" message carries the system prompt; each adapter maps it
 # to its SDK's convention. `model` is passed per call since one adapter serves several models.
+# temperature=None keeps the provider default (the eval judge uses 0). Note: current
+# Claude models (Opus 5, Sonnet 5, Opus 4.7/4.8) reject sampling params — leave it None there.
 
 # Completion: text, tokens_in, tokens_out, cost_usd, latency_ms, model
+# tokens_out includes thinking/reasoning tokens (they are billed as output).
+
+class Embedder(Protocol):
+    name: str
+    def embed(self, texts: list[str]) -> list[Vector]: ...   # Vector = list[float]
 ```
 
-Adapters (MVP): **Anthropic** (Haiku / Sonnet / Opus), **OpenAI** (small / large), **Ollama** (local small model, e.g. llama3.2 or qwen2.5). Router selects a `(provider, model)` tier; everything downstream is provider-agnostic.
+Embeddings are a **separate `Embedder` protocol**, not a method on `LLMProvider`: the embedding backend may differ from the completion provider, and cache/router/compressor depend only on `Embedder`. Embedding model, dimensionality and price come from config.
+
+Adapters (current): **Gemini** (`google-genai`; Flash-Lite / Flash / Pro + `gemini-embedding-2`) is the default provider. **Anthropic** (Haiku / Sonnet / Opus) is implemented but unused until keys are available. **OpenAI** and **Ollama** are deferred (see §7). Router selects a `(provider, model)` tier; everything downstream is provider-agnostic.
 
 ### 3.2 Tiers
 Abstract "tier" decouples routing from providers:
-- `LOCAL`  — Ollama small model (near-zero marginal cost)
-- `MID`    — cheap hosted (Haiku / gpt small)
-- `FRONTIER` — Sonnet/Opus / gpt large
+- `LOCAL`  — budget tier. Currently Gemini Flash-Lite; becomes an Ollama small model (near-zero marginal cost) once that adapter lands
+- `MID`    — cheap hosted (Gemini Flash; later Haiku / gpt small)
+- `FRONTIER` — Gemini Pro (later Sonnet/Opus / gpt large)
 
 Tier→model mapping lives in config so experiments can swap models without code changes.
+
+The **active tier set** is also config: `tier_mode` selects an entry of `[tier_modes]` (`two` = local + mid, both on Gemini's free tier; `three` adds the paid Pro frontier tier). Router and engine read the active set from config and never assume three tiers.
 
 ### 3.3 Semantic cache
 - Embed incoming query, cosine-match against stored `(embedding, response)` pairs.
@@ -72,11 +84,33 @@ Tier→model mapping lives in config so experiments can swap models without code
 - Correctness risk: too-loose threshold serves wrong answers. Threshold is a first-class experiment knob, not a constant.
 - Cache key must include anything that changes the answer (system prompt version, tier policy) to avoid stale/incorrect hits.
 
+Implemented (milestone 3):
+- Store: `sqlite-vec` `vec0` table per embedding dimension, cosine distance, partitioned by **namespace** = hash of system prompt, `max_tokens`, default tier, active tier→(provider, model) map, embedding model/dim, embed template and a manual `cache.version`. (Add router type/config here when the router lands.)
+- Defaults (config `[cache]`): `threshold = 0.95`, `gemini-embedding-2` at 768 dims, embedded text = raw query (`embed_template = "{text}"`). Chosen conservative; calibrate with the harness.
+- Hit = nearest neighbour similarity ≥ threshold. Misses also log the nearest similarity in `cache_sim` (null only when the namespace is empty), so hit rate vs. threshold can be analysed offline.
+- A hit row records the tier/provider/model that produced the cached answer, `tokens_in = tokens_out = 0`, and costs only the lookup embedding.
+- Requests with conversation history **bypass** the cache (`cache_status = bypass`): a standalone answer may be wrong in context.
+- Only successful, non-empty answers are stored. An embedding failure fails the request (row logged as `miss` with `error`).
+
 ### 3.4 Router
 - **Baseline (heuristic):** query length + complexity keywords + presence of code/math → tier. Must exist first so the learned router has something to beat.
 - **Learned:** embedding-based classifier over a labeled "needs-frontier-model" set. Outputs tier + confidence.
 - Both implement the same `Router` interface; swappable via config.
 - Escalation policy (optional, later): if a low tier's answer fails a cheap quality check, retry one tier up. Log escalations.
+
+Implemented (milestone 4):
+- Interface: `Router.route(query, history) -> RouteDecision(tier, score, confidence, reasons)`; `router.type` in config selects `fixed` (always `default_tier` — the pre-router baseline) or `heuristic`.
+- Heuristic = pure functions: features (word count, distinct complexity keywords incl. plurals, code patterns, math patterns) → points (weights in `[router.heuristic]`, keyword points capped) → score → tier via `tier_cutoffs`. The cheapest active tier is the floor; the highest *active* tier whose cutoff the score meets wins, so in `tier_mode = "two"` frontier-grade queries stay on mid. Detection regexes live in code; every weight, threshold, keyword and cutoff is config. Defaults are untuned.
+- Runs only on a cache miss (pipeline order: cache → router → provider). The active router's config is part of the cache namespace.
+- The heuristic ignores conversation history for now.
+
+Implemented (milestone 7) — learned router, `learned_router.py` + `router.LearnedRouter`, config `[router.learned]`:
+- **Training data**: `evals/router_train.jsonl`, 150 hand-written queries (5 categories × 3 difficulty hints × 10), disjoint from every eval set (a test rejects exact and near-duplicate overlap, token Jaccard ≥ 0.6). The difficulty field is an authoring hint only — never a label.
+- **Labels** (`gpte router label`, pseudo-reference): every active tier answers each query; the judge grades each cheaper tier's answer with the top tier's answer as the reference; label = cheapest tier scoring ≥ `label_min_score` (8), else the top tier. Labelling cost is recorded per record. Labels therefore mean "agrees with the top tier", not "correct".
+- **Model** (`gpte router train`): class-balanced multinomial logistic regression (scikit-learn) on the L2-normalized query embedding; stored as JSON (`models/router.json`: classes, weights, embedding model/dim, label counts, cross-validated accuracy). Routing refuses a model trained on a different embedding space.
+- **Routing**: probabilities renormalized over the active tiers; confidence = top probability; below `confidence_threshold` (0.6) and with `escalate = true`, route one active tier up (capped). The router's query embedding counts in `embed_tokens`. Its settings and a hash of the model file are part of the cache namespace.
+- **Benchmark**: experiments `learned` / `learned-two` in `evals/experiments.toml` alongside `heuristic` / `heuristic-two`; the report's Routing section shows tier mix, mean confidence and escalations; `scripts/router_delta.py --router learned` shows the cost delta.
+- `--fake` labels come from the heuristic router and training uses fake embeddings — illustrative only; fake models are saved as `*-fake.json` (git-ignored).
 
 ### 3.5 Context compressor
 - Rolling summary of old turns + embedding-retrieval of only relevant prior turns.
@@ -84,12 +118,27 @@ Tier→model mapping lives in config so experiments can swap models without code
 - Config: max history tokens, summary trigger threshold.
 - Log tokens saved per request.
 
+Implemented (milestone 6) — `compressor.py`, config `[compressor]`:
+- A turn = one user+assistant exchange. When the history estimate (chars / `chars_per_token`) exceeds `trigger_tokens` (default 1500), the last `keep_recent_turns` (4) exchanges stay verbatim and older ones are replaced per `strategy`: `none` | `truncate` (dropped — the naive baseline) | `summary` (rolling summary) | `retrieval` (top-`retrieve_k` (3) older exchanges by embedding similarity to the query, in conversation order) | `summary+retrieval`. Summary/excerpts are sent as `system` messages before the verbatim turns.
+- The summary is written by the `summary_tier` model (default `local`, the budget tier), capped at `summary_max_tokens`. "Rolling": summaries are stored by the exact older exchanges they cover, so a growing conversation only summarizes its new exchanges; retrieval likewise embeds each exchange once per conversation. Both stores are in-memory per Engine.
+- Accounting: `compressed`, `tokens_saved` (gross history-estimate delta), `summary_tokens` (summarizer in + out); summarizer cost and retrieval embedding tokens are included in `cost_usd` / `embed_tokens`, so eval tokens/query is net.
+- Runs after the cache (history requests bypass the cache, so compressor config needn't be in the cache namespace) and before the router.
+- Eval: `evals/conversations.jsonl` (10 hand-written conversations, 15–19 exchanges, all above the trigger) with probes tagged `needle:early`, `needle:middle`, `aggregate`, `recent-only` (+ one `correction`); strategies are experiments in `evals/experiments_compression.toml`. `scripts/compress_delta.py` shows the token/cost delta.
+- Two cost views in the eval: **one-shot** (each item pays for summarizing/embedding its whole older history at once — the worst case) and **amortized** (`eval.amortize_compression`, default on: for summary/retrieval strategies the runner replays the compressor turn by turn through the conversation — rolling summary and embeddings reused, no answer calls — and adds total overhead ÷ requests to the final request's answer tokens/cost). The report shows both, with a second pair of frontier plots. The replay makes real budget-tier summarizer and embedding calls.
+- LLMLingua prompt compression is not implemented (optional comparison point, deferred).
+
 ### 3.6 Trace logger
 One row per request. Pydantic schema, written to SQLite (and/or JSONL).
 
-Fields: `id, ts, query_hash, cache_status, cache_sim, tier, provider, model, tokens_in, tokens_out, cost_usd, latency_ms, compressed (bool), tokens_saved, escalated (bool), response_len, error`.
+Fields: `id, ts, query_hash, cache_status, cache_sim, tier, provider, model, tokens_in, tokens_out, cost_usd, latency_ms, compressed (bool), tokens_saved, escalated (bool), response_len, embed_tokens, summary_tokens, route_confidence, error`.
 
-`error` is null on success; failed requests still emit their row with the exception recorded. `tokens_in` counts all input tokens processed, including any prompt-cache reads/writes.
+- `cache_status`: `hit` | `miss` | `bypass` (cache on but not consulted) | `disabled`.
+- `tokens_in` / `tokens_out` are LLM tokens only: `tokens_in` includes any prompt-cache reads/writes, `tokens_out` includes thinking tokens.
+- `embed_tokens` is the (estimated, `chars / embedding_chars_per_token`) size of text embedded for the cache lookup and compressor retrieval — Gemini's embed API reports no counts.
+- `escalated`: the request was routed one tier above the router's prediction because the learned router's confidence was below threshold (answer-quality escalation is not implemented). `route_confidence`: the learned router's confidence (null for other routers).
+- `compressed` / `tokens_saved` / `summary_tokens`: whether the compressor shrank the history, the estimated history tokens removed (gross), and the summarizer's tokens in + out.
+- `cost_usd` = LLM cost + summarizer cost + embedding cost; `latency_ms` is end-to-end (embed + lookup + LLM).
+- `error` is null on success; failed requests still emit their row with the exception recorded.
 
 ### 3.7 Eval harness — build early, not last
 - **Dataset:** queries with quality labels / reference answers, tagged by difficulty.
@@ -99,10 +148,18 @@ Fields: `id, ts, query_hash, cache_status, cache_sim, tier, provider, model, tok
 
 Without this, every optimization is blind. It is a Phase 1 deliverable, not a final step.
 
+Implemented (milestone 5) — `gpte eval [--only a,b] [--limit N] [--fake]`, code in `src/gpt_efficient/evals/`:
+- **Dataset** (`evals/seed.jsonl`, 42 hand-written items): `id, query, reference, difficulty (easy|medium|hard), category (factual|reasoning|math|code|writing), exact?, paraphrase_of?, tags`. Includes paraphrase pairs (cache-hit probes, must follow their original) and `near-miss:<id>` items (similar wording, different answer — wrong-hit probes). Open-ended items' references list key points/constraints.
+- **Judge**: `gemini-2.5-pro` (config `[judge]`), temperature 0, not part of the answer ladder so no model grades its own output. Rubric `v1` in `evals/judge.py`: 1–10, correctness dominant (a significant error caps at 4, a wrong final answer at 2), then completeness, then concision; length never rewarded. Blind: sees only question, reference and candidate. Quality = (score − 1) / 9.
+- **Exact match**: lenient deterministic containment check (numeric-aware) on items with `exact`; a sanity check on the judge, not a score. Report lists judge/exact disagreements.
+- **Runner**: each experiment in `evals/experiments.toml` = config.toml + deep-merged overrides, validated before anything runs; fresh trace + cache DB per experiment under `results/<run>/<experiment>/` (cache hits only from earlier items in the same run). Transient errors retried with backoff (`[eval]`); failed requests are excluded from means and counted.
+- **Metric / report**: per experiment mean quality vs. mean tokens/query (LLM in + out incl. thinking + estimated embedding) and vs. system $/query — two efficiency-frontier plots, plus quality per 1k tokens and quality per $, a by-difficulty breakdown, cache hits with similarity and **wrong hits** (hit with quality < `eval.low_quality`), and judge sanity stats. Judge cost is reported separately, never charged to a config. Outputs: `report.md`, `summary.csv`, `results.jsonl`, `frontier_tokens.png`, `frontier_cost.png`.
+- `--fake` runs everything offline with deterministic fakes (`gpt_efficient/fakes.py`); its numbers are illustrative only and the report says so.
+
 ---
 
 ## 4. Configuration
-All experiment knobs in one `config.toml` (or pydantic-settings): tier→model map, cache threshold, compressor limits, router type, judge model. Changing a config value and re-running the harness = one experiment.
+All experiment knobs in one `config.toml` (or pydantic-settings): default provider, tier→model map, active tier set (`tier_mode`), router type + heuristic weights/cutoffs + learned-router threshold/escalation/label score, compressor strategy/trigger/window/k/summary tier, judge model/temperature, eval dataset/experiments/retries, per-model pricing (incl. long-context rates), embedding model/dim/price, cache threshold, compressor limits, router type, judge model. Changing a config value and re-running the harness = one experiment.
 
 ---
 
@@ -110,13 +167,15 @@ All experiment knobs in one `config.toml` (or pydantic-settings): tier→model m
 Each is a discrete, testable unit. Do not start the next until the current one's test passes.
 
 1. **Scaffold** — repo, `LLMProvider` interface, Anthropic adapter, trace logger. *Test: one query end-to-end, one logged trace row.*
-2. **Providers** — OpenAI + Ollama adapters behind the same interface. *Test: same query across all three, traces logged.*
+2. **Gemini provider + embeddings** — Gemini adapter behind `LLMProvider`, `Embedder` protocol + Gemini embedder, two/three-tier switch. *Test: mocked Gemini call → correct `Completion` (thinking counted as output, cost from config); mocked embed → right count/dimension of vectors.* (Originally OpenAI + Ollama; revised because only a Gemini key is available — see §7.)
 3. **Semantic cache** — embed + vector store, tunable threshold, sim logging. *Test: repeat/paraphrased query → cache hit.*
 4. **Heuristic router** — baseline tier selection. *Test: easy vs. hard query pick different tiers.*
 5. **Eval harness** — dataset loader, LLM-judge, quality-per-token report. *Test: report generated over a small dataset.*
 6. **Context compressor** — rolling summary + retrieval. *Test: long history → fewer tokens, quality held.*
 7. **Learned router** — classifier; benchmark vs. heuristic on the harness. *Test: frontier plot compares both routers.*
-8. **Results notebook** — efficiency-frontier plots and writeup.
+8. **Results notebook** — efficiency-frontier plots and writeup. *Test: notebook runs end to end on (fake) eval runs and writes figures + findings flagged ILLUSTRATIVE; statistics checked exactly.*
+
+   Implemented: `analysis.py` (pure; all numbers), `notebooks/results.ipynb` (thin display + exploration), `gpte findings` (same output without Jupyter). A manifest (`[analysis] manifest`) maps roles to run dirs: `routing` (seed.jsonl run → RQ1–RQ3) and `compression` (conversations.jsonl run → RQ4). Method: 95% paired percentile bootstrap over items (`n_boot`, `seed`); a config **holds quality** if the lower CI bound of (config − reference) quality is > −`margin` (0.05); reference = first of `reference_order` present (`fixed-frontier`, else `fixed-mid`). Every eval run writes `run.json` (fake flag, dataset, experiments, judge, rubric version, git commit); fake runs are marked ILLUSTRATIVE in every section. Interpretation paragraphs are TODOs for a human — only data-derived statements (e.g. "cheapest config that held quality") are generated.
 
 UI: thin CLI (Rich/Textual) from milestone 1; web UI only after the engine is solid.
 
@@ -126,7 +185,7 @@ UI: thin CLI (Rich/Textual) from milestone 1; web UI only after the engine is so
 - Python 3.12, `uv` for env/deps
 - pydantic / pydantic-settings for schemas + config
 - SQLite (+ `sqlite-vec`) for traces and cache
-- Anthropic + OpenAI SDKs; Ollama via HTTP
+- `google-genai` (Gemini) now; Anthropic SDK (adapter ready); OpenAI SDK + Ollama via HTTP later
 - Rich/Textual CLI; matplotlib/plotly for plots; Jupyter for the results notebook
 
 ---
@@ -136,3 +195,5 @@ UI: thin CLI (Rich/Textual) from milestone 1; web UI only after the engine is so
 - Streaming responses (add after engine works)
 - Fine-tuning models (routing/compression only)
 - A polished web UI before the benchmark exists
+
+**Deferred, not dropped:** multi-provider (Anthropic + OpenAI + local Ollama). Until those keys are available (~1 month), the whole project — completions, embeddings and the eval judge — runs on Gemini alone. Because everything sits behind `LLMProvider` / `Embedder`, adding those adapters later is additive: a new adapter file plus config entries. Cross-provider comparisons in the results are out of scope until then.

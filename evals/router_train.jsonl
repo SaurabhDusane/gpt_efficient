@@ -1,0 +1,150 @@
+{"id": "rt-factual-easy-01", "query": "Which country's national animal is the kangaroo?", "category": "factual", "difficulty": "easy"}
+{"id": "rt-factual-easy-02", "query": "Which planet is known as the Red Planet?", "category": "factual", "difficulty": "easy"}
+{"id": "rt-factual-easy-03", "query": "What gas do plants absorb from the air?", "category": "factual", "difficulty": "easy"}
+{"id": "rt-factual-easy-04", "query": "Who painted the Mona Lisa?", "category": "factual", "difficulty": "easy"}
+{"id": "rt-factual-easy-05", "query": "How many continents are there?", "category": "factual", "difficulty": "easy"}
+{"id": "rt-factual-easy-06", "query": "What is the freezing point of water in Kelvin?", "category": "factual", "difficulty": "easy"}
+{"id": "rt-factual-easy-07", "query": "Which ocean is the largest?", "category": "factual", "difficulty": "easy"}
+{"id": "rt-factual-easy-08", "query": "What language is mainly spoken in Brazil?", "category": "factual", "difficulty": "easy"}
+{"id": "rt-factual-easy-09", "query": "What is the tallest mountain on Earth?", "category": "factual", "difficulty": "easy"}
+{"id": "rt-factual-easy-10", "query": "How many legs does a spider have?", "category": "factual", "difficulty": "easy"}
+{"id": "rt-factual-medium-01", "query": "Why is the sky darker at higher altitudes?", "category": "factual", "difficulty": "medium"}
+{"id": "rt-factual-medium-02", "query": "What caused the 2008 financial crisis, briefly?", "category": "factual", "difficulty": "medium"}
+{"id": "rt-factual-medium-03", "query": "How do vaccines train the immune system?", "category": "factual", "difficulty": "medium"}
+{"id": "rt-factual-medium-04", "query": "How does weather differ from climate?", "category": "factual", "difficulty": "medium"}
+{"id": "rt-factual-medium-05", "query": "Why do some metals rust while others don't?", "category": "factual", "difficulty": "medium"}
+{"id": "rt-factual-medium-06", "query": "How does GPS determine your location?", "category": "factual", "difficulty": "medium"}
+{"id": "rt-factual-medium-07", "query": "What is the role of the mitochondria in a cell?", "category": "factual", "difficulty": "medium"}
+{"id": "rt-factual-medium-08", "query": "Why did the Roman Empire split into East and West?", "category": "factual", "difficulty": "medium"}
+{"id": "rt-factual-medium-09", "query": "How do noise-cancelling headphones work?", "category": "factual", "difficulty": "medium"}
+{"id": "rt-factual-medium-10", "query": "What is inflation and how do central banks try to control it?", "category": "factual", "difficulty": "medium"}
+{"id": "rt-factual-hard-01", "query": "Explain how CRISPR-Cas9 edits a gene and what its main off-target risks are.", "category": "factual", "difficulty": "hard"}
+{"id": "rt-factual-hard-02", "query": "Compare the causes of the French and American revolutions in depth.", "category": "factual", "difficulty": "hard"}
+{"id": "rt-factual-hard-03", "query": "Why is quantum entanglement not usable for faster-than-light communication?", "category": "factual", "difficulty": "hard"}
+{"id": "rt-factual-hard-04", "query": "Analyze why the Bretton Woods system collapsed in the early 1970s.", "category": "factual", "difficulty": "hard"}
+{"id": "rt-factual-hard-05", "query": "How do transformer language models use attention, and what are its computational limits?", "category": "factual", "difficulty": "hard"}
+{"id": "rt-factual-hard-06", "query": "Explain the evidence for dark matter and the main competing explanations.", "category": "factual", "difficulty": "hard"}
+{"id": "rt-factual-hard-07", "query": "What trade-offs do central banks face between inflation and unemployment, according to the Phillips curve debate?", "category": "factual", "difficulty": "hard"}
+{"id": "rt-factual-hard-08", "query": "Explain how mRNA vaccines differ from viral vector vaccines at the molecular level.", "category": "factual", "difficulty": "hard"}
+{"id": "rt-factual-hard-09", "query": "Why do some economists argue that minimum wage increases do not reduce employment?", "category": "factual", "difficulty": "hard"}
+{"id": "rt-factual-hard-10", "query": "Describe how plate tectonics explains earthquakes, volcanoes and mountain building together.", "category": "factual", "difficulty": "hard"}
+{"id": "rt-reasoning-easy-01", "query": "If today is Monday, what day will it be in 10 days?", "category": "reasoning", "difficulty": "easy"}
+{"id": "rt-reasoning-easy-02", "query": "Tom is taller than Sam, and Sam is taller than Ann. Who is shortest?", "category": "reasoning", "difficulty": "easy"}
+{"id": "rt-reasoning-easy-03", "query": "Is a square always a rectangle?", "category": "reasoning", "difficulty": "easy"}
+{"id": "rt-reasoning-easy-04", "query": "If I have 3 apples and eat one, then buy 4 more, how many do I have?", "category": "reasoning", "difficulty": "easy"}
+{"id": "rt-reasoning-easy-05", "query": "Which is heavier: a kilogram of feathers or a kilogram of iron?", "category": "reasoning", "difficulty": "easy"}
+{"id": "rt-reasoning-easy-06", "query": "What comes next: 2, 4, 8, 16, ...?", "category": "reasoning", "difficulty": "easy"}
+{"id": "rt-reasoning-easy-07", "query": "If all cats are mammals, is every mammal a cat?", "category": "reasoning", "difficulty": "easy"}
+{"id": "rt-reasoning-easy-08", "query": "A clock shows 3:00. What angle do the hands make?", "category": "reasoning", "difficulty": "easy"}
+{"id": "rt-reasoning-easy-09", "query": "Can a person be their own grandparent's sibling?", "category": "reasoning", "difficulty": "easy"}
+{"id": "rt-reasoning-easy-10", "query": "If it rains, the ground gets wet. The ground is wet. Did it necessarily rain?", "category": "reasoning", "difficulty": "easy"}
+{"id": "rt-reasoning-medium-01", "query": "Three friends split a bill of $75 so that one pays twice as much as each of the others. How much does each pay?", "category": "reasoning", "difficulty": "medium"}
+{"id": "rt-reasoning-medium-02", "query": "A farmer has 17 sheep and all but 9 run away. How many are left?", "category": "reasoning", "difficulty": "medium"}
+{"id": "rt-reasoning-medium-03", "query": "How many times do a clock's hour and minute hands overlap in 12 hours?", "category": "reasoning", "difficulty": "medium"}
+{"id": "rt-reasoning-medium-04", "query": "If you flip two fair coins, what is the chance of getting exactly one head?", "category": "reasoning", "difficulty": "medium"}
+{"id": "rt-reasoning-medium-05", "query": "A snail climbs 3 m up a 10 m well each day and slips back 2 m each night. When does it get out?", "category": "reasoning", "difficulty": "medium"}
+{"id": "rt-reasoning-medium-06", "query": "Two trains 300 km apart travel toward each other at 70 and 80 km/h. When do they meet?", "category": "reasoning", "difficulty": "medium"}
+{"id": "rt-reasoning-medium-07", "query": "What is wrong with the argument: 'Most successful people wake up early, so waking up early makes you successful'?", "category": "reasoning", "difficulty": "medium"}
+{"id": "rt-reasoning-medium-08", "query": "You have two ropes that each burn in 60 minutes unevenly. How can you measure 45 minutes?", "category": "reasoning", "difficulty": "medium"}
+{"id": "rt-reasoning-medium-09", "query": "If a password must be 4 digits with no repeats, how many passwords are possible?", "category": "reasoning", "difficulty": "medium"}
+{"id": "rt-reasoning-medium-10", "query": "Which is more likely: rolling a total of 7 or a total of 10 with two dice? Why?", "category": "reasoning", "difficulty": "medium"}
+{"id": "rt-reasoning-hard-01", "query": "Explain the Monty Hall problem and why switching doors is better.", "category": "reasoning", "difficulty": "hard"}
+{"id": "rt-reasoning-hard-02", "query": "Solve the classic puzzle: 12 coins, one counterfeit (heavier or lighter), a balance scale, three weighings. How?", "category": "reasoning", "difficulty": "hard"}
+{"id": "rt-reasoning-hard-03", "query": "Explain the prisoner's dilemma and why mutual defection is the Nash equilibrium.", "category": "reasoning", "difficulty": "hard"}
+{"id": "rt-reasoning-hard-04", "query": "Why is the statement 'this sentence is false' a paradox, and how do logicians handle it?", "category": "reasoning", "difficulty": "hard"}
+{"id": "rt-reasoning-hard-05", "query": "Evaluate the argument that because no one has disproven something, it must be true. Name the fallacy and give a counterexample.", "category": "reasoning", "difficulty": "hard"}
+{"id": "rt-reasoning-hard-06", "query": "Explain Simpson's paradox with a concrete medical-trial example.", "category": "reasoning", "difficulty": "hard"}
+{"id": "rt-reasoning-hard-07", "query": "A hundred prisoners must find their own numbers in 100 boxes, each opening 50. Explain the loop strategy and its success rate.", "category": "reasoning", "difficulty": "hard"}
+{"id": "rt-reasoning-hard-08", "query": "Why does the gambler's fallacy fail for independent events but not for drawing cards without replacement?", "category": "reasoning", "difficulty": "hard"}
+{"id": "rt-reasoning-hard-09", "query": "Explain the two-envelope paradox and where the naive expected-value argument goes wrong.", "category": "reasoning", "difficulty": "hard"}
+{"id": "rt-reasoning-hard-10", "query": "Design a fair way for three people to split a cake so that nobody feels envious. Explain why it works.", "category": "reasoning", "difficulty": "hard"}
+{"id": "rt-math-easy-01", "query": "Multiply 36 by 12.", "category": "math", "difficulty": "easy"}
+{"id": "rt-math-easy-02", "query": "What is 25% of 360?", "category": "math", "difficulty": "easy"}
+{"id": "rt-math-easy-03", "query": "What is the square root of 144?", "category": "math", "difficulty": "easy"}
+{"id": "rt-math-easy-04", "query": "Convert 3/8 to a decimal.", "category": "math", "difficulty": "easy"}
+{"id": "rt-math-easy-05", "query": "What is 7 cubed?", "category": "math", "difficulty": "easy"}
+{"id": "rt-math-easy-06", "query": "Round 3.14159 to two decimal places.", "category": "math", "difficulty": "easy"}
+{"id": "rt-math-easy-07", "query": "What is 1000 divided by 8?", "category": "math", "difficulty": "easy"}
+{"id": "rt-math-easy-08", "query": "What is the perimeter of a rectangle 5 cm by 12 cm?", "category": "math", "difficulty": "easy"}
+{"id": "rt-math-easy-09", "query": "What is 2 to the power of 10?", "category": "math", "difficulty": "easy"}
+{"id": "rt-math-easy-10", "query": "What is 0.6 as a fraction in lowest terms?", "category": "math", "difficulty": "easy"}
+{"id": "rt-math-medium-01", "query": "Solve 2x - 5 = 3x + 4.", "category": "math", "difficulty": "medium"}
+{"id": "rt-math-medium-02", "query": "What is the area of a circle with radius 7 cm?", "category": "math", "difficulty": "medium"}
+{"id": "rt-math-medium-03", "query": "A price rises 20% and then falls 20%. What is the net change?", "category": "math", "difficulty": "medium"}
+{"id": "rt-math-medium-04", "query": "Find the mean and median of 3, 8, 8, 10, 21.", "category": "math", "difficulty": "medium"}
+{"id": "rt-math-medium-05", "query": "Solve the system x + y = 10 and x - y = 4.", "category": "math", "difficulty": "medium"}
+{"id": "rt-math-medium-06", "query": "What is the derivative of 3x^2 + 5x - 2?", "category": "math", "difficulty": "medium"}
+{"id": "rt-math-medium-07", "query": "How many ways can 5 books be arranged on a shelf?", "category": "math", "difficulty": "medium"}
+{"id": "rt-math-medium-08", "query": "What is the compound interest on $1000 at 5% per year for 3 years?", "category": "math", "difficulty": "medium"}
+{"id": "rt-math-medium-09", "query": "Find the slope of the line through (2, 3) and (6, 11).", "category": "math", "difficulty": "medium"}
+{"id": "rt-math-medium-10", "query": "What is the sum of the interior angles of a hexagon?", "category": "math", "difficulty": "medium"}
+{"id": "rt-math-hard-01", "query": "Prove that there are infinitely many prime numbers.", "category": "math", "difficulty": "hard"}
+{"id": "rt-math-hard-02", "query": "Evaluate the integral of ln(x) dx.", "category": "math", "difficulty": "hard"}
+{"id": "rt-math-hard-03", "query": "Find all real solutions of x^4 - 5x^2 + 4 = 0.", "category": "math", "difficulty": "hard"}
+{"id": "rt-math-hard-04", "query": "Prove by induction that 1 + 2 + ... + n = n(n+1)/2.", "category": "math", "difficulty": "hard"}
+{"id": "rt-math-hard-05", "query": "What is the probability that in a group of 23 people at least two share a birthday? Show the reasoning.", "category": "math", "difficulty": "hard"}
+{"id": "rt-math-hard-06", "query": "Find the eigenvalues of the matrix [[2, 1], [1, 2]].", "category": "math", "difficulty": "hard"}
+{"id": "rt-math-hard-07", "query": "Solve the differential equation dy/dx = 3y with y(0) = 2.", "category": "math", "difficulty": "hard"}
+{"id": "rt-math-hard-08", "query": "Show that the sum of the reciprocals of the natural numbers diverges.", "category": "math", "difficulty": "hard"}
+{"id": "rt-math-hard-09", "query": "How many diagonals does a convex polygon with n sides have? Derive the formula.", "category": "math", "difficulty": "hard"}
+{"id": "rt-math-hard-10", "query": "Compute the limit of (1 + 1/n)^n as n goes to infinity and explain why.", "category": "math", "difficulty": "hard"}
+{"id": "rt-code-easy-01", "query": "How do I get the length of a string in JavaScript?", "category": "code", "difficulty": "easy"}
+{"id": "rt-code-easy-02", "query": "What does the git status command show?", "category": "code", "difficulty": "easy"}
+{"id": "rt-code-easy-03", "query": "How do I read a file line by line in Python?", "category": "code", "difficulty": "easy"}
+{"id": "rt-code-easy-04", "query": "In JavaScript, how does == differ from ===?", "category": "code", "difficulty": "easy"}
+{"id": "rt-code-easy-05", "query": "How do I make a directory from the Linux terminal?", "category": "code", "difficulty": "easy"}
+{"id": "rt-code-easy-06", "query": "What does HTTP status code 404 mean?", "category": "code", "difficulty": "easy"}
+{"id": "rt-code-easy-07", "query": "How do I convert a string to an integer in Python?", "category": "code", "difficulty": "easy"}
+{"id": "rt-code-easy-08", "query": "What is a boolean?", "category": "code", "difficulty": "easy"}
+{"id": "rt-code-easy-09", "query": "How do I comment out a line in SQL?", "category": "code", "difficulty": "easy"}
+{"id": "rt-code-easy-10", "query": "What does the CSS property display: none do?", "category": "code", "difficulty": "easy"}
+{"id": "rt-code-medium-01", "query": "Write a Python function that returns the n-th Fibonacci number iteratively.", "category": "code", "difficulty": "medium"}
+{"id": "rt-code-medium-02", "query": "Explain the difference between a list and a tuple in Python and when to use each.", "category": "code", "difficulty": "medium"}
+{"id": "rt-code-medium-03", "query": "How do I undo the last git commit but keep the changes?", "category": "code", "difficulty": "medium"}
+{"id": "rt-code-medium-04", "query": "When should I use an inner join versus a left join in SQL?", "category": "code", "difficulty": "medium"}
+{"id": "rt-code-medium-05", "query": "Why does this JavaScript print 3 three times? for (var i = 0; i < 3; i++) setTimeout(() => console.log(i));", "category": "code", "difficulty": "medium"}
+{"id": "rt-code-medium-06", "query": "Write a function to check whether two strings are anagrams.", "category": "code", "difficulty": "medium"}
+{"id": "rt-code-medium-07", "query": "What is a race condition, with a simple example?", "category": "code", "difficulty": "medium"}
+{"id": "rt-code-medium-08", "query": "How does a hash map handle collisions?", "category": "code", "difficulty": "medium"}
+{"id": "rt-code-medium-09", "query": "Explain what a REST API is and what makes an endpoint RESTful.", "category": "code", "difficulty": "medium"}
+{"id": "rt-code-medium-10", "query": "Write a SQL query to find duplicate email addresses in a users table.", "category": "code", "difficulty": "medium"}
+{"id": "rt-code-hard-01", "query": "Design a rate limiter for an API gateway handling 50k requests per second. Discuss the trade-offs.", "category": "code", "difficulty": "hard"}
+{"id": "rt-code-hard-02", "query": "Explain how garbage collection works in the JVM and the trade-offs between collectors.", "category": "code", "difficulty": "hard"}
+{"id": "rt-code-hard-03", "query": "Implement an LRU cache with O(1) get and put, and explain the data structures.", "category": "code", "difficulty": "hard"}
+{"id": "rt-code-hard-04", "query": "Design the database schema and indexing strategy for a Twitter-like timeline.", "category": "code", "difficulty": "hard"}
+{"id": "rt-code-hard-05", "query": "Explain how the Raft consensus algorithm elects a leader and replicates the log.", "category": "code", "difficulty": "hard"}
+{"id": "rt-code-hard-06", "query": "Debug: my Python asyncio program hangs when I call a blocking function inside a coroutine. Why, and how do I fix it?", "category": "code", "difficulty": "hard"}
+{"id": "rt-code-hard-07", "query": "Compare optimistic and pessimistic locking for a high-contention inventory system.", "category": "code", "difficulty": "hard"}
+{"id": "rt-code-hard-08", "query": "Explain how a B-tree index speeds up range queries and why it suits disks.", "category": "code", "difficulty": "hard"}
+{"id": "rt-code-hard-09", "query": "Write a function that finds the longest palindromic substring and analyze its complexity.", "category": "code", "difficulty": "hard"}
+{"id": "rt-code-hard-10", "query": "How would you design a distributed job queue that guarantees at-least-once delivery without duplicates side effects?", "category": "code", "difficulty": "hard"}
+{"id": "rt-writing-easy-01", "query": "Write a one-line birthday message for a coworker.", "category": "writing", "difficulty": "easy"}
+{"id": "rt-writing-easy-02", "query": "Suggest a title for a blog post about houseplants.", "category": "writing", "difficulty": "easy"}
+{"id": "rt-writing-easy-03", "query": "Rewrite this more politely: 'Send me the report now.'", "category": "writing", "difficulty": "easy"}
+{"id": "rt-writing-easy-04", "query": "Give me three synonyms for 'happy'.", "category": "writing", "difficulty": "easy"}
+{"id": "rt-writing-easy-05", "query": "Write a short out-of-office reply.", "category": "writing", "difficulty": "easy"}
+{"id": "rt-writing-easy-06", "query": "Write a haiku about coffee.", "category": "writing", "difficulty": "easy"}
+{"id": "rt-writing-easy-07", "query": "Correct the grammar: 'Their going to the store tomorow.'", "category": "writing", "difficulty": "easy"}
+{"id": "rt-writing-easy-08", "query": "Write a tweet announcing a bake sale.", "category": "writing", "difficulty": "easy"}
+{"id": "rt-writing-easy-09", "query": "Give a one-sentence description of a cozy café.", "category": "writing", "difficulty": "easy"}
+{"id": "rt-writing-easy-10", "query": "Write a two-line thank-you note to a teacher.", "category": "writing", "difficulty": "easy"}
+{"id": "rt-writing-medium-01", "query": "Write a 100-word product description for a stainless steel water bottle.", "category": "writing", "difficulty": "medium"}
+{"id": "rt-writing-medium-02", "query": "Draft a polite email asking a landlord to fix a leaking tap.", "category": "writing", "difficulty": "medium"}
+{"id": "rt-writing-medium-03", "query": "Summarize the plot of Cinderella in exactly three sentences.", "category": "writing", "difficulty": "medium"}
+{"id": "rt-writing-medium-04", "query": "Write a short motivational paragraph for someone starting to learn a language.", "category": "writing", "difficulty": "medium"}
+{"id": "rt-writing-medium-05", "query": "Rewrite this paragraph to be more concise: 'In order to be able to make sure that we are able to finish on time, it is important that we start as early as we possibly can.'", "category": "writing", "difficulty": "medium"}
+{"id": "rt-writing-medium-06", "query": "Write a limerick about a forgetful robot.", "category": "writing", "difficulty": "medium"}
+{"id": "rt-writing-medium-07", "query": "Draft a LinkedIn post announcing a new job, in a humble tone.", "category": "writing", "difficulty": "medium"}
+{"id": "rt-writing-medium-08", "query": "Write a short story opening line that creates suspense.", "category": "writing", "difficulty": "medium"}
+{"id": "rt-writing-medium-09", "query": "Explain photosynthesis to a seven-year-old in four sentences.", "category": "writing", "difficulty": "medium"}
+{"id": "rt-writing-medium-10", "query": "Write a cover letter opening paragraph for a junior data analyst role.", "category": "writing", "difficulty": "medium"}
+{"id": "rt-writing-hard-01", "query": "Write a 150-word persuasive argument for four-day work weeks, then a 150-word rebuttal.", "category": "writing", "difficulty": "hard"}
+{"id": "rt-writing-hard-02", "query": "Write a sonnet about city rain that follows the Shakespearean rhyme scheme.", "category": "writing", "difficulty": "hard"}
+{"id": "rt-writing-hard-03", "query": "Rewrite a paragraph of legal-sounding terms of service into plain English that a teenager would understand.", "category": "writing", "difficulty": "hard"}
+{"id": "rt-writing-hard-04", "query": "Write a short dialogue between a skeptical scientist and an astrologer that is fair to both sides.", "category": "writing", "difficulty": "hard"}
+{"id": "rt-writing-hard-05", "query": "Draft a sensitive email informing a team about layoffs, balancing honesty and empathy.", "category": "writing", "difficulty": "hard"}
+{"id": "rt-writing-hard-06", "query": "Write a 200-word short story that ends with a twist, without using the letter 'z'.", "category": "writing", "difficulty": "hard"}
+{"id": "rt-writing-hard-07", "query": "Write a speech opening for a graduation ceremony that avoids clichés.", "category": "writing", "difficulty": "hard"}
+{"id": "rt-writing-hard-08", "query": "Compose a product launch press release with a headline, subheading, quote and boilerplate.", "category": "writing", "difficulty": "hard"}
+{"id": "rt-writing-hard-09", "query": "Write a poem where each line is exactly seven syllables, about the first snowfall.", "category": "writing", "difficulty": "hard"}
+{"id": "rt-writing-hard-10", "query": "Critique the style of this sentence and rewrite it three ways: 'The meeting, which was long, was attended by many people who were tired.'", "category": "writing", "difficulty": "hard"}
