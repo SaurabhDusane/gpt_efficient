@@ -7,10 +7,12 @@ dependencies = [
     "anthropic>=1.8.0",
     "google-genai>=2.25.0",
     "matplotlib>=3.11.2",
+    "numpy>=2.5.3",
     "pydantic>=2.13.5",
     "pydantic-settings>=2.15.0",
     "python-dotenv>=1.2.3",
     "rich>=15.0.0",
+    "scikit-learn>=1.9.1",
     "sqlite-vec>=0.1.9",
 ]
 

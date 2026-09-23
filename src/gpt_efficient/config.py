@@ -65,10 +65,26 @@ class HeuristicRouterConfig(BaseModel):
     tier_cutoffs: dict[Tier, float] = {Tier.MID: 1.0, Tier.FRONTIER: 3.0}
 
 
+class LearnedRouterConfig(BaseModel):
+    """Embedding classifier trained on pseudo-reference labels (see learned_router.py)."""
+
+    model_path: Path = Path("models/router.json")  # written by `gpte router train`
+    # Below this confidence, route one tier above the prediction (if escalate).
+    confidence_threshold: float = 0.6
+    escalate: bool = True
+    # Labelling: a cheaper tier "suffices" if the judge scores its answer at least
+    # this (1-10) against the top active tier's answer as reference.
+    label_min_score: int = 8
+    train_data: Path = Path("evals/router_train.jsonl")
+    labels_path: Path = Path("evals/router_labels.jsonl")
+    C: float = 1.0  # inverse regularization strength for logistic regression
+
+
 class RouterConfig(BaseModel):
     # "fixed" always uses default_tier (the pre-router baseline).
-    type: Literal["fixed", "heuristic"] = "fixed"
+    type: Literal["fixed", "heuristic", "learned"] = "fixed"
     heuristic: HeuristicRouterConfig = HeuristicRouterConfig()
+    learned: LearnedRouterConfig = LearnedRouterConfig()
 
 
 class CompressorConfig(BaseModel):
@@ -167,8 +183,12 @@ class Settings(BaseSettings):
 
     @property
     def needs_embedder(self) -> bool:
-        """Cache lookups and retrieval-based compression both embed text."""
-        return self.cache.enabled or "retrieval" in self.compressor.strategy
+        """Cache lookups, retrieval-based compression and the learned router embed text."""
+        return (
+            self.cache.enabled
+            or "retrieval" in self.compressor.strategy
+            or self.router.type == "learned"
+        )
 
     @property
     def active_tiers(self) -> list[Tier]:
