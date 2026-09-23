@@ -53,6 +53,9 @@ class ExperimentSummary(BaseModel):
     wrong_cache_hits: int
     compressed: int
     mean_tokens_saved: float | None  # history tokens removed per answered query (gross)
+    # Compressor overhead averaged over each conversation's turns (= one-shot if none).
+    mean_tokens_amortized: float | None
+    mean_cost_amortized: float | None
     tier_mix: dict[str, int]
     exact_items: int
     exact_acc: float | None
@@ -117,6 +120,14 @@ def summarize(results: list[ItemResult], low_quality: float) -> list[ExperimentS
                 wrong_cache_hits=sum(_is_wrong_hit(r, low_quality) for r in answered),
                 compressed=sum(r.compressed for r in answered),
                 mean_tokens_saved=_mean([float(r.tokens_saved) for r in answered]),
+                mean_tokens_amortized=_mean(
+                    [r.amortized_tokens if r.amortized_tokens is not None else float(r.total_tokens)
+                     for r in answered]
+                ),
+                mean_cost_amortized=_mean(
+                    [r.amortized_cost_usd if r.amortized_cost_usd is not None else r.cost_usd
+                     for r in answered]
+                ),  # fmt: skip
                 tier_mix=dict(Counter(r.tier.value for r in answered)),
                 exact_items=len(exact),
                 exact_acc=_mean([1.0 if r.exact_match else 0.0 for r in exact]),
@@ -278,7 +289,7 @@ def _usd_per_1k(v: float | None) -> str:
 _CSV_FIELDS = [
     "experiment", "n", "answered", "errors", "judged", "judge_errors", "mean_quality",
     "mean_tokens", "mean_cost_usd", "mean_latency_ms", "q_per_1k_tokens", "q_per_usd",
-    "cache_hits", "wrong_cache_hits", "compressed", "mean_tokens_saved", "exact_items", "exact_acc",
+    "cache_hits", "wrong_cache_hits", "compressed", "mean_tokens_saved", "mean_tokens_amortized", "mean_cost_amortized", "exact_items", "exact_acc",
     "judge_exact_disagreements", "judge_cost_usd", "tier_mix",
 ]  # fmt: skip
 
@@ -318,6 +329,22 @@ def write_report(
         "system cost per 1k queries (USD, judge excluded)",
         lambda v: f"${v:,.3g}", "Quality vs. cost", paths["frontier_cost"],
     )  # fmt: skip
+
+    if any(r.compressed for r in results):
+        # Second view: compressor overhead amortized over each conversation's turns.
+        paths["frontier_tokens_amortized"] = out_dir / "frontier_tokens_amortized.png"
+        paths["frontier_cost_amortized"] = out_dir / "frontier_cost_amortized.png"
+        _frontier_plot(
+            summaries, lambda s: s.mean_tokens_amortized,
+            "mean tokens per query, compressor overhead amortized over the conversation",
+            lambda v: f"{v:,.0f}", "Quality vs. tokens (amortized)", paths["frontier_tokens_amortized"],
+        )  # fmt: skip
+        _frontier_plot(
+            summaries,
+            lambda s: s.mean_cost_amortized * 1000 if s.mean_cost_amortized is not None else None,
+            "system cost per 1k queries, compressor overhead amortized (USD)",
+            lambda v: f"${v:,.3g}", "Quality vs. cost (amortized)", paths["frontier_cost_amortized"],
+        )  # fmt: skip
 
     paths["report"].write_text(_markdown(results, summaries, settings, meta or {}))
     return paths
@@ -393,17 +420,35 @@ def _markdown(
             "",
             "## Context compression",
             "",
+            "Two views of the same runs. **One-shot**: each eval item pays for summarizing/"
+            "embedding its whole older history at once (worst case). **Amortized**: the "
+            "compressor is replayed turn by turn through the conversation (rolling summary and "
+            "embeddings reused, as in live chat) and its overhead averaged per request.",
+            "",
             "| experiment | compressed / answered | history tokens saved / query (gross) "
-            "| summarizer tokens / query | tokens / query (net) |",
-            "|---|---|---|---|---|",
+            "| summarizer tokens / query | tokens / query (one-shot) | tokens / query (amortized) "
+            "| $ / 1k (one-shot) | $ / 1k (amortized) |",
+            "|---|---|---|---|---|---|---|---|",
         ]
         for s in summaries:
             rows = [r for r in results if r.experiment == s.experiment and r.error is None]
             summ = _mean([float(r.summary_tokens) for r in rows])
             lines.append(
                 f"| {s.experiment} | {s.compressed} / {s.answered} | {_fmt(s.mean_tokens_saved, ',.0f')} "
-                f"| {_fmt(summ, ',.0f')} | {_fmt(s.mean_tokens, ',.0f')} |"
+                f"| {_fmt(summ, ',.0f')} | {_fmt(s.mean_tokens, ',.0f')} "
+                f"| {_fmt(s.mean_tokens_amortized, ',.0f')} | {_usd_per_1k(s.mean_cost_usd)} "
+                f"| {_usd_per_1k(s.mean_cost_amortized)} |"
             )
+        lines += [
+            "",
+            "![Quality vs. tokens (amortized)](frontier_tokens_amortized.png)",
+            "",
+            "![Quality vs. cost (amortized)](frontier_cost_amortized.png)",
+        ]
+        amortize_errors = [r for r in results if r.amortize_error]
+        if amortize_errors:
+            lines += ["", "Amortization failed (one-shot values used) for: " + ", ".join(
+                f"{r.experiment}/{r.item_id}" for r in amortize_errors)]  # fmt: skip
 
     lines += [
         "",
@@ -441,6 +486,9 @@ def _markdown(
         "- **quality**: judge score (1–10) mapped to 0–1 as (score − 1) / 9; mean over judged items.",
         "- **tokens / query**: LLM input + output (incl. thinking) + estimated embedding tokens "
         "+ summarizer tokens; mean over answered items. A cache hit spends 0 LLM tokens.",
+        "- **amortized**: compressor overhead (summarizer + retrieval embeddings) replayed turn "
+        "by turn through each conversation and divided by its number of requests, plus the final "
+        "request's own answer tokens/cost. Equal to one-shot for items without compression.",
         "- **tokens saved**: history tokens removed by the compressor (estimate, gross); the "
         "summarizer's own tokens are already in tokens / query, so that column is net.",
         "- **$ / 1k queries**: system cost (LLM + embeddings) at configured prices; judge cost excluded.",
