@@ -32,6 +32,17 @@ class ModelPrice(BaseModel):
     output_per_mtok_long: float | None = None
 
 
+class CacheConfig(BaseModel):
+    enabled: bool = False
+    # Cosine similarity at or above which a stored answer is served.
+    threshold: float = 0.95
+    db: Path = Path("data/cache.db")
+    # What gets embedded for the lookup; "{text}" is the raw query.
+    embed_template: str = "{text}"
+    # Bump to invalidate every cached answer without touching other settings.
+    version: str = "1"
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="GPTE_", env_nested_delimiter="__")
 
@@ -47,6 +58,9 @@ class Settings(BaseSettings):
     embedding_model: str = "gemini-embedding-2"
     embedding_dim: int | None = None  # None -> model's native dimensionality
     embedding_price_per_mtok: float = 0.0
+    # The embed API returns no token counts, so embed_tokens is estimated.
+    embedding_chars_per_token: float = 4.0
+    cache: CacheConfig = CacheConfig()
     system_prompt: str = "You are a helpful assistant."
     max_tokens: int = 1024
     trace_db: Path = Path("data/traces.db")

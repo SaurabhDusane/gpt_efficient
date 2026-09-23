@@ -20,6 +20,11 @@ class TraceLogger:
         with self._connect() as conn:
             cols = ", ".join(f"{c} {'PRIMARY KEY' if c == 'id' else ''}" for c in _COLUMNS)
             conn.execute(f"CREATE TABLE IF NOT EXISTS traces ({cols})")
+            # Trace DBs from earlier milestones lack newer columns; add them in place.
+            existing = {r[1] for r in conn.execute("PRAGMA table_info(traces)")}
+            for c in _COLUMNS:
+                if c not in existing:
+                    conn.execute(f"ALTER TABLE traces ADD COLUMN {c}")
 
     def _connect(self) -> sqlite3.Connection:
         return sqlite3.connect(self.path)

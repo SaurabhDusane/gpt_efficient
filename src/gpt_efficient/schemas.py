@@ -19,6 +19,7 @@ class Tier(StrEnum):
 class CacheStatus(StrEnum):
     HIT = "hit"
     MISS = "miss"
+    BYPASS = "bypass"  # cache on, but not consulted (e.g. request has history)
     DISABLED = "disabled"
 
 
@@ -55,6 +56,7 @@ class TraceRow(BaseModel):
     tokens_saved: int = 0
     escalated: bool = False
     response_len: int = 0
+    embed_tokens: int = Field(default=0, description="Estimated tokens embedded for the cache lookup.")
     error: str | None = Field(default=None, description="Set when the request failed.")
 
 
