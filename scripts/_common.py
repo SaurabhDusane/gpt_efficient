@@ -10,7 +10,7 @@ from gpt_efficient.config import Settings
 from gpt_efficient.engine import Engine
 from gpt_efficient.fakes import FakeEmbedder, FakeProvider
 from gpt_efficient.providers import build_embedder, build_providers
-from gpt_efficient.schemas import CacheStatus, TraceRow
+from gpt_efficient.schemas import CacheStatus, Message, TraceRow
 from gpt_efficient.trace import TraceLogger
 
 
@@ -20,8 +20,15 @@ def load_queries(path: Path | None, default: list[str]) -> list[str]:
     return [q.strip() for q in path.read_text().splitlines() if q.strip()]
 
 
-def run(settings: Settings, queries: list[str], fake: bool, workdir: Path, label: str) -> list[TraceRow]:
-    """Run `queries` through a fresh Engine (own trace + cache DB) and return its rows."""
+def run(
+    settings: Settings,
+    queries: list[str],
+    fake: bool,
+    workdir: Path,
+    label: str,
+    histories: list[list[Message]] | None = None,
+) -> list[TraceRow]:
+    """Run `queries` (optionally each with a history) through a fresh Engine; return its rows."""
     settings = settings.model_copy(
         update={
             "trace_db": workdir / f"{label}-traces.db",
@@ -32,15 +39,15 @@ def run(settings: Settings, queries: list[str], fake: bool, workdir: Path, label
     if fake:
         names = {settings.target(t).provider for t in settings.active_tiers}
         providers = {n: FakeProvider(settings) for n in names}
-        embedder = FakeEmbedder(settings.embedding_dim or 768) if cache_on else None
+        embedder = FakeEmbedder(settings.embedding_dim or 768) if settings.needs_embedder else None
     else:
         providers = build_providers(settings)
-        embedder = build_embedder(settings) if cache_on else None
+        embedder = build_embedder(settings) if settings.needs_embedder else None
     logger = TraceLogger(settings.trace_db)
     cache = SemanticCache(settings.cache.db) if cache_on else None
     engine = Engine(settings, providers, logger, embedder=embedder, cache=cache)
-    for q in queries:
-        engine.ask(q)
+    for i, q in enumerate(queries):
+        engine.ask(q, histories[i] if histories else None)
     return logger.all()
 
 
@@ -52,7 +59,8 @@ def totals(rows: list[TraceRow]) -> dict[str, float]:
         "tokens_in": sum(r.tokens_in for r in rows),
         "tokens_out": sum(r.tokens_out for r in rows),
         "embed_tokens (est.)": sum(r.embed_tokens for r in rows),
-        "total tokens": sum(r.tokens_in + r.tokens_out + r.embed_tokens for r in rows),
+        "summary_tokens": sum(r.summary_tokens for r in rows),
+        "total tokens": sum(r.tokens_in + r.tokens_out + r.embed_tokens + r.summary_tokens for r in rows),
         "cost_usd": sum(r.cost_usd for r in rows),
     }
 

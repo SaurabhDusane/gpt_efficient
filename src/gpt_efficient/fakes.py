@@ -38,9 +38,11 @@ class FakeProvider:
         self, messages: list[Message], max_tokens: int, model: str, temperature: float | None = None
     ) -> Completion:
         tokens_in = sum(len(m.content.split()) for m in messages) * 2
-        tokens_out = _FAKE_TOKENS_OUT[_rank(self.settings, model)]
+        # Like a real model, never exceed max_tokens (~4 chars per token).
+        text = f"(fake {model} answer to: {messages[-1].content})"[: max_tokens * 4]
+        tokens_out = min(max_tokens, max(_FAKE_TOKENS_OUT[_rank(self.settings, model)], len(text) // 4))
         return Completion(
-            text=f"(fake {model} answer to: {messages[-1].content})",
+            text=text,
             tokens_in=tokens_in,
             tokens_out=tokens_out,
             cost_usd=self.settings.cost_usd(model, tokens_in, tokens_out),
