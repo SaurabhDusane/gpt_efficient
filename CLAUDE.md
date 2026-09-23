@@ -16,7 +16,9 @@ A chat assistant optimized for **quality per token**, plus a benchmark that meas
 - **Provider:** Gemini is the only live provider for now (`default_provider = "gemini"`). Anthropic/OpenAI/Ollama are deferred, not dropped (SPEC §7).
 - **Embeddings:** separate `Embedder` protocol (`providers/base.py`), not an `embed()` method on `LLMProvider` — embeddings and completions may come from different providers. Build via `providers.build_embedder(settings)`; never import an SDK for embeddings elsewhere.
 - **Tier set:** `tier_mode` in `config.toml` picks a list from `[tier_modes]` (`two` = free-tier Flash-Lite + Flash, `three` adds paid Pro). Read it via `Settings.active_tiers`; never assume the number of tiers.
-- **Token accounting:** `tokens_out` includes thinking tokens on every provider; `tokens_in` includes cached-prompt tokens.
+- **Token accounting:** `tokens_out` includes thinking tokens on every provider; `tokens_in` includes cached-prompt tokens. Embedding tokens go in `embed_tokens` (estimated) and their cost is included in `cost_usd`.
+- **Semantic cache:** `cache.py` stores/searches vectors only; the engine embeds and applies the threshold. Anything that changes answers must be part of `cache_namespace()` — when you add a new answer-affecting setting (e.g. router config), add it there. Queries with history bypass the cache.
+- **Savings scripts:** `scripts/<mechanism>_delta.py` compares a mechanism against the baseline (`--fake` runs offline, illustrative only).
 
 ## Workflow expectations
 - Before writing code for a milestone, restate the milestone's goal and its test in one line, then list the files you'll create/change. Wait for nothing if it's within the current milestone; just proceed.
@@ -32,7 +34,7 @@ A chat assistant optimized for **quality per token**, plus a benchmark that meas
 - Secrets from environment (`.env`, git-ignored). Never commit keys.
 
 ## Trace schema (canonical)
-`id, ts, query_hash, cache_status, cache_sim, tier, provider, model, tokens_in, tokens_out, cost_usd, latency_ms, compressed, tokens_saved, escalated, response_len, error`. Keep this in sync with `SPEC.md` §3.6 — if you change one, change both.
+`id, ts, query_hash, cache_status, cache_sim, tier, provider, model, tokens_in, tokens_out, cost_usd, latency_ms, compressed, tokens_saved, escalated, response_len, embed_tokens, error`. Keep this in sync with `SPEC.md` §3.6 — if you change one, change both.
 
 ## When unsure
 If a decision affects the research validity (cache threshold defaults, judge model choice, how quality is scored), stop and ask rather than guessing. Implementation details (file layout, helper functions) — just decide and note it.

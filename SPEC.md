@@ -81,6 +81,14 @@ The **active tier set** is also config: `tier_mode` selects an entry of `[tier_m
 - Correctness risk: too-loose threshold serves wrong answers. Threshold is a first-class experiment knob, not a constant.
 - Cache key must include anything that changes the answer (system prompt version, tier policy) to avoid stale/incorrect hits.
 
+Implemented (milestone 3):
+- Store: `sqlite-vec` `vec0` table per embedding dimension, cosine distance, partitioned by **namespace** = hash of system prompt, `max_tokens`, default tier, active tier→(provider, model) map, embedding model/dim, embed template and a manual `cache.version`. (Add router type/config here when the router lands.)
+- Defaults (config `[cache]`): `threshold = 0.95`, `gemini-embedding-2` at 768 dims, embedded text = raw query (`embed_template = "{text}"`). Chosen conservative; calibrate with the harness.
+- Hit = nearest neighbour similarity ≥ threshold. Misses also log the nearest similarity in `cache_sim` (null only when the namespace is empty), so hit rate vs. threshold can be analysed offline.
+- A hit row records the tier/provider/model that produced the cached answer, `tokens_in = tokens_out = 0`, and costs only the lookup embedding.
+- Requests with conversation history **bypass** the cache (`cache_status = bypass`): a standalone answer may be wrong in context.
+- Only successful, non-empty answers are stored. An embedding failure fails the request (row logged as `miss` with `error`).
+
 ### 3.4 Router
 - **Baseline (heuristic):** query length + complexity keywords + presence of code/math → tier. Must exist first so the learned router has something to beat.
 - **Learned:** embedding-based classifier over a labeled "needs-frontier-model" set. Outputs tier + confidence.
@@ -96,9 +104,13 @@ The **active tier set** is also config: `tier_mode` selects an entry of `[tier_m
 ### 3.6 Trace logger
 One row per request. Pydantic schema, written to SQLite (and/or JSONL).
 
-Fields: `id, ts, query_hash, cache_status, cache_sim, tier, provider, model, tokens_in, tokens_out, cost_usd, latency_ms, compressed (bool), tokens_saved, escalated (bool), response_len, error`.
+Fields: `id, ts, query_hash, cache_status, cache_sim, tier, provider, model, tokens_in, tokens_out, cost_usd, latency_ms, compressed (bool), tokens_saved, escalated (bool), response_len, embed_tokens, error`.
 
-`error` is null on success; failed requests still emit their row with the exception recorded. `tokens_in` counts all input tokens processed, including any prompt-cache reads/writes.
+- `cache_status`: `hit` | `miss` | `bypass` (cache on but not consulted) | `disabled`.
+- `tokens_in` / `tokens_out` are LLM tokens only: `tokens_in` includes any prompt-cache reads/writes, `tokens_out` includes thinking tokens.
+- `embed_tokens` is the (estimated, `chars / embedding_chars_per_token`) size of the text embedded for the cache lookup — Gemini's embed API reports no counts.
+- `cost_usd` = LLM cost + embedding cost; `latency_ms` is end-to-end (embed + lookup + LLM).
+- `error` is null on success; failed requests still emit their row with the exception recorded.
 
 ### 3.7 Eval harness — build early, not last
 - **Dataset:** queries with quality labels / reference answers, tagged by difficulty.
