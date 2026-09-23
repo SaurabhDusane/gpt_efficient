@@ -5,6 +5,7 @@ description = "Chat assistant optimized for quality per token, with an efficienc
 requires-python = ">=3.12"
 dependencies = [
     "anthropic>=1.8.0",
+    "google-genai>=2.25.0",
     "pydantic>=2.13.5",
     "pydantic-settings>=2.15.0",
     "python-dotenv>=1.2.3",
